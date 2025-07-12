@@ -1,4 +1,6 @@
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import asyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -15,7 +17,19 @@ export default function App() {
   const [password, setPassword] = useState('');
   const router = useRouter()
   const handleSignin = ()=>{
-    router.replace('/Home')
+    if (!username || !password) {
+      alert('Please enter both username and password');
+      return;
+    }
+
+    axios.post(`${process.env.EXPO_PUBLIC_API}/users/login`, { username, password })
+      .then(response => {
+        asyncStorage.setItem('userToken', response.data.data.token);
+        router.replace('/Home');
+      })
+      .catch(error => {
+        alert('Login failed. Please try again.');
+      });
   }
   return (
     <SafeAreaView className="flex-1 bg-blue-600 items-center justify-center px-6">

@@ -1,14 +1,22 @@
+// full updated code with isStepValid logic for form navigation
+
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
+  FlatList,
+  Keyboard,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   SafeAreaView,
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  TouchableWithoutFeedback,
+  View,
 } from 'react-native';
 import Animated, {
   SlideInLeft,
@@ -16,185 +24,366 @@ import Animated, {
   SlideOutLeft,
   SlideOutRight,
 } from 'react-native-reanimated';
+import ToastManager, { Toast } from 'toastify-react-native';
 
-const totalSteps = 4;
+const totalSteps = 3;
 
-export default function index() {
+export default function Index() {
   const [step, setStep] = useState(1);
   const [direction, setDirection] = useState('next');
+  const [customers, setCustomers] = useState([]);
+  const [items, setItems] = useState([]);
+  const [isCustomerFocused, setIsCustomerFocused] = useState(false);
+  const [isItemFocused, setIsItemFocused] = useState(false);
+  const [pending, setPending] = useState();
+  const [cart, setCart] = useState([]);
+  const [showCart, setShowCart] = useState(false);
 
   const [form, setForm] = useState({
-    customerName: '',
+    customerId: '',
+    selectedCustomerId: '',
     itemName: '',
+    selectedItemId: '',
     quantity: '',
     price: '',
     onlinePayment: '',
     cashPayment: '',
-    debt: '',
-    bill: '',
   });
 
-  const handleChange = (key, value) => {
-    setForm(prev => ({ ...prev, [key]: value }));
-  };
+  const handleSubmit = async() => {
+    const token = await AsyncStorage.getItem('userToken');
+    const payload = {
+      customerId: form.selectedCustomerId,
+      items: cart.map(({ itemId, quantity, amount }) => ({
+        itemId,
+        quantity,
+        amount,
+      })),
+      totalAmount: cart.reduce((sum, item) => sum + item.amount, 0),
+      payment: {
+        cash: Number(form.cashPayment),
+        online: Number(form.onlinePayment),
+      },
+      date: new Date(),
+    };
+    try {
+      await axios.post(`${process.env.EXPO_PUBLIC_API}/order`, payload, {
+          headers: { Authorization: token },
+        });
+        Toast.success("Order Added Successfully");
+        resetForm();
+    } catch (error) {
+      console.log(error)
+    }
+  }
 
-  const handleStepChange = newStep => {
-    setDirection(newStep > step ? 'next' : 'back');
-    setStep(newStep);
-  };
+  const resetForm = () => {
+    setForm({
+      customerId: '',
+      selectedCustomerId: '',
+      itemName: '',
+      selectedItemId: '',
+      quantity: '',
+      price: '',
+      onlinePayment: '',
+      cashPayment: '',
+    });
+    setCart([]);
+    setStep(1);
+  }
 
   const inputClass =
     'bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 w-full text-base';
 
+  const handleChange = (key, value, resetId = false) => {
+    setForm((prev) => ({
+      ...prev,
+      [key]: value,
+      ...(resetId && key === 'customerId' ? { selectedCustomerId: '' } : {}),
+      ...(resetId && key === 'itemName' ? { selectedItemId: '' } : {}),
+    }));
+  };
+
+  const handleStepChange = (newStep) => {
+    setDirection(newStep > step ? 'next' : 'back');
+    setStep(newStep);
+  };
+
+  useEffect(() => {
+    const fetchData = async () => {
+      const token = await AsyncStorage.getItem('userToken');
+      try {
+        const res1 = await axios.get(`${process.env.EXPO_PUBLIC_API}/customers?view=true`, { headers: { Authorization: token } });
+        const res2 = await axios.get(`${process.env.EXPO_PUBLIC_API}/items?view=true`, { headers: { Authorization: token } });
+        setCustomers(Array.isArray(res1.data) ? res1.data : res1.data.data || []);
+        setItems(res2.data.data.items);
+      } catch (error) {
+        console.error(error);
+      }
+    };
+    fetchData();
+  }, []);
+
+  const addItemToCart = () => {
+    if (!form.selectedItemId || !form.quantity || !form.price) return;
+    const item = items.find((i) => i._id === form.selectedItemId);
+    const newItem = {
+      itemId: form.selectedItemId,
+      itemName: item?.name || form.itemName,
+      quantity: Number(form.quantity),
+      amount: Number(form.price),
+    };
+    setCart((prev) => [...prev, newItem]);
+    setForm((prev) => ({ ...prev, itemName: '', selectedItemId: '', quantity: '', price: '' }));
+    Toast.success('Item added to cart');
+  };
+
+  const deleteCartItem = (index) => {
+    cart.length === 1 ? (setShowCart(false),handleStepChange(2))  : null;
+    setCart((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const isStepValid = () => {
+    if (step === 1) {
+      return form.customerId.trim() !== '' && form.selectedCustomerId.trim() !== '';
+    }
+    if (step === 2) {
+      return cart.length > 0;
+    }
+    if (step === 3) {
+      return form.onlinePayment.trim() !== '' && form.cashPayment.trim() !== '';
+    }
+    return false;
+  };
+
   const renderStep = () => {
-    switch (step) {
-      case 1:
-        return (
-          <View className="space-y-4">
-            <Text className="text-gray-700 font-semibold">Customer Name</Text>
+    if (step === 1) {
+      const filteredCustomers = form.customerId.trim()
+        ? customers.filter((cust) => cust.name.toLowerCase().includes(form.customerId.toLowerCase()))
+        : customers.slice(0, 5);
+
+      return (
+        <View className="space-y-4">
+          <Text className="text-gray-700 font-semibold">Search Customer</Text>
+          <View className="relative w-full">
             <TextInput
               className={inputClass}
               placeholder="Search or enter customer name"
-              value={form.customerName}
-              onChangeText={val => handleChange('customerName', val)}
+              value={form.customerId}
+              onFocus={() => setIsCustomerFocused(true)}
+              onBlur={() => setTimeout(() => setIsCustomerFocused(false), 100)}
+              onChangeText={(val) => handleChange('customerId', val, true)}
             />
+            {isCustomerFocused && (
+              <View className="absolute z-50 bg-white rounded-xl shadow top-16 left-0 right-0 border border-gray-300 max-h-48">
+                {filteredCustomers.length > 0 ? (
+                  filteredCustomers.map((cust, i) => (
+                    <TouchableOpacity
+                      key={cust._id || i}
+                      onPress={() => {
+                        handleChange('customerId', cust.name);
+                        setForm((prev) => ({ ...prev, selectedCustomerId: cust._id }));
+                        setPending(cust.totalPendingAmount);
+                        setIsCustomerFocused(false);
+                      }}
+                      className="px-4 py-3 border-b border-gray-100"
+                    >
+                      <Text>{cust.name}</Text>
+                    </TouchableOpacity>
+                  ))
+                ) : (
+                  <Text className="p-4 text-gray-500">No customers found</Text>
+                )}
+              </View>
+            )}
           </View>
-        );
-      case 2:
-        return (
-          <View className="space-y-4">
-            <Text className="text-gray-700 font-semibold">Item Name</Text>
+        </View>
+      );
+    }
+
+    if (step === 2) {
+      const filteredItems = form.itemName.trim()
+        ? items.filter((item) => item.name.toLowerCase().includes(form.itemName.toLowerCase()))
+        : items.slice(0, 5);
+
+      return (
+        <View className="space-y-4">
+          <Text className="text-gray-700 font-semibold">Item Name</Text>
+          <View className="relative w-full">
             <TextInput
               className={inputClass}
-              placeholder="e.g. Necklace"
+              placeholder="Search or enter item name"
               value={form.itemName}
-              onChangeText={val => handleChange('itemName', val)}
+              onFocus={() => setIsItemFocused(true)}
+              onBlur={() => setTimeout(() => setIsItemFocused(false), 100)}
+              onChangeText={(val) => handleChange('itemName', val, true)}
             />
-            <Text className="text-gray-700 font-semibold">Quantity</Text>
-            <TextInput
-              className={inputClass}
-              placeholder="e.g. 2"
-              keyboardType="numeric"
-              value={form.quantity}
-              onChangeText={val => handleChange('quantity', val)}
-            />
-            <Text className="text-gray-700 font-semibold">Price</Text>
-            <TextInput
-              className={inputClass}
-              placeholder="e.g. 12000"
-              keyboardType="numeric"
-              value={form.price}
-              onChangeText={val => handleChange('price', val)}
-            />
+            {isItemFocused && (
+              <View className="absolute z-50 bg-white rounded-xl shadow top-16 left-0 right-0 border border-gray-300 max-h-48">
+                {filteredItems.length > 0 ? (
+                  filteredItems.map((item, i) => (
+                    <TouchableOpacity
+                      key={item._id || i}
+                      onPress={() => {
+                        handleChange('itemName', item.name);
+                        setForm((prev) => ({ ...prev, selectedItemId: item._id }));
+                        setIsItemFocused(false);
+                      }}
+                      className="px-4 py-3 border-b border-gray-100"
+                    >
+                      <Text>{item.name}</Text>
+                    </TouchableOpacity>
+                  ))
+                ) : (
+                  <Text className="p-4 text-gray-500">No items found</Text>
+                )}
+              </View>
+            )}
           </View>
-        );
-      case 3:
-        return (
-          <View className="space-y-4">
-            <Text className="text-gray-700 font-semibold">Online Payment</Text>
-            <TextInput
-              className={inputClass}
-              placeholder="e.g. 5000"
-              keyboardType="numeric"
-              value={form.onlinePayment}
-              onChangeText={val => handleChange('onlinePayment', val)}
-            />
-            <Text className="text-gray-700 font-semibold">Cash Payment</Text>
-            <TextInput
-              className={inputClass}
-              placeholder="e.g. 3000"
-              keyboardType="numeric"
-              value={form.cashPayment}
-              onChangeText={val => handleChange('cashPayment', val)}
-            />
-          </View>
-        );
-      case 4:
-        return (
-          <View className="space-y-4">
-            <Text className="text-gray-700 font-semibold">Customer Debt</Text>
-            <TextInput
-              className={inputClass}
-              placeholder="e.g. 2000"
-              keyboardType="numeric"
-              value={form.debt}
-              onChangeText={val => handleChange('debt', val)}
-            />
-            <Text className="text-gray-700 font-semibold">Final Bill</Text>
-            <TextInput
-              className={inputClass}
-              placeholder="e.g. 10000"
-              keyboardType="numeric"
-              value={form.bill}
-              onChangeText={val => handleChange('bill', val)}
-            />
-          </View>
-        );
+
+          <Text className="text-gray-700 font-semibold">Quantity</Text>
+          <TextInput
+            className={inputClass}
+            placeholder="Enter Quantity"
+            maxLength={10}
+            keyboardType="numeric"
+            value={form.quantity}
+            onChangeText={(val) => {
+              const numericVal = val.replace(/[^0-9]/g, '');
+              handleChange('quantity', numericVal);
+            }}
+          />
+
+          <Text className="text-gray-700 font-semibold">Price</Text>
+          <TextInput
+            className={inputClass}
+            placeholder="Enter Price"
+            maxLength={10}
+            keyboardType="decimal-pad"
+            value={form.price}
+            onChangeText={(val) => {
+              const numericVal = val.replace(/[^0-9.]/g, '')
+                .replace(/^(\d*\.\d*).*$/, '$1');
+              handleChange('price', numericVal);
+            }}
+          />
+          <TouchableOpacity
+            onPress={addItemToCart}
+            className={`${!form.selectedItemId || !form.quantity || !form.price ? `bg-gray-400` : `bg-blue-600`} rounded-xl px-6 py-3 mt-2`}
+            disabled={!form.selectedItemId || !form.quantity || !form.price}
+          >
+            <Text className="text-white text-center font-bold">Add Item</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (step === 3) {
+      const total = cart.reduce((acc, cur) => acc + parseInt(cur.amount || 0), 0);
+      const finalBill = (pending || 0) + total;
+
+      return (
+        <View className="space-y-4">
+          <Text className="text-gray-700 font-semibold">Customer Debt</Text>
+          <TextInput className="bg-gray-200 px-4 py-3 rounded-xl" value={String(pending || '')} editable={false} />
+
+          <Text className="text-gray-700 font-semibold">Final Bill</Text>
+          <TextInput className="bg-gray-200 px-4 py-3 rounded-xl" value={String(finalBill)} editable={false} />
+
+          <Text className="text-gray-700 font-semibold">Online Payment</Text>
+          <TextInput className={inputClass} keyboardType="numeric" value={form.onlinePayment} onChangeText={(val) => handleChange('onlinePayment', val)} />
+
+          <Text className="text-gray-700 font-semibold">Cash Payment</Text>
+          <TextInput className={inputClass} keyboardType="numeric" value={form.cashPayment} onChangeText={(val) => handleChange('cashPayment', val)} />
+
+          <Text className="text-gray-700 font-semibold">Total Payment</Text>
+          <TextInput className="bg-gray-200 px-4 py-3 rounded-xl" value={(parseFloat(form.onlinePayment || 0) + parseFloat(form.cashPayment || 0)).toString() || '0'} editable={false} />
+        </View>
+      );
     }
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
-      <LinearGradient
-        colors={['#2563eb', '#3b82f6']}
-        className="px-6 pt-14 pb-6 rounded-b-3xl shadow-md h-full"
-      >
-        <Text className="text-white font-bold text-xl text-center">Stock Management</Text>
-        <Text className="text-white mt-1 text-sm mb-3 text-center">Step {step} of {totalSteps}</Text>
-        <View className="w-full h-2 bg-white/30 rounded-full">
-          <View
-            className="h-2 bg-white rounded-full"
-            style={{ width: `${(step / totalSteps) * 100}%` }}
-          />
-        </View>
-        <Text className="text-white mt-2 text-center">{Math.floor((step / totalSteps) * 100)}% Complete</Text>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <SafeAreaView className="flex-1 bg-white">
+        <LinearGradient colors={["#2563eb", "#3b82f6"]} className="px-6 pt-14 pb-6 rounded-b-3xl shadow-md h-full">
+          <Text className="text-white font-bold text-xl text-center">Stock Management</Text>
+          <Text className="text-white mt-1 text-sm mb-3 text-center">Step {step} of {totalSteps}</Text>
 
-
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="flex-1"
-      >
-        <Animated.View
-          key={step}
-          className="flex-1 px-6 py-6"
-          entering={direction === 'next' ? SlideInRight : SlideInLeft}
-          exiting={direction === 'next' ? SlideOutLeft : SlideOutRight}
-        >
-          <View className="bg-white p-6 rounded-2xl shadow-xl border border-gray-200 mt-20">
-            {renderStep()}
+          <View className="w-full h-2 bg-white/30 rounded-full">
+            <View className="h-2 bg-white rounded-full" style={{ width: `${(step / totalSteps) * 100}%` }} />
           </View>
-        </Animated.View>
-      </KeyboardAvoidingView>
 
-      <View className="flex-row justify-between items-center px-6 pb-6">
-        {step > 1 ? (
-          <TouchableOpacity
-            onPress={() => handleStepChange(step - 1)}
-            className="flex-row items-center bg-white border border-blue-300 px-6 py-3 rounded-full shadow"
-          >
-            <Ionicons name="chevron-back" size={20} color="#2563eb" />
-            <Text className="text-blue-600 font-semibold ml-1">Previous</Text>
-          </TouchableOpacity>
-        ) : <View />}
+          {cart.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setShowCart(true)}
+              className="bg-indigo-600 rounded-xl px-6 py-3 mt-2 absolute right-10 top-10 flex-row items-center space-x-2"
+            >
+              <Ionicons name="cart" size={20} color="white" />
+              <Text className="text-white font-bold">({cart.length})</Text>
+            </TouchableOpacity>
+          )}
 
-        {step < totalSteps ? (
-          <TouchableOpacity
-            onPress={() => handleStepChange(step + 1)}
-            className="flex-row items-center bg-blue-600 px-6 py-3 rounded-full shadow"
-          >
-            <Text className="text-white font-semibold mr-1">Next</Text>
-            <Ionicons name="chevron-forward" size={20} color="white" />
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            onPress={() => alert('Form submitted')}
-            className="bg-green-600 px-6 py-3 rounded-full shadow"
-          >
-            <Text className="text-white font-semibold">Submit</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-            </LinearGradient>
-    </SafeAreaView>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
+            <ToastManager />
+            <Animated.View
+              key={step}
+              className="flex-1 px-6 py-6"
+              entering={direction === 'next' ? SlideInRight : SlideInLeft}
+              exiting={direction === 'next' ? SlideOutLeft : SlideOutRight}
+            >
+              <View className="bg-white p-6 rounded-2xl shadow-xl border border-gray-200 mt-20">
+                {renderStep()}
+              </View>
+            </Animated.View>
+          </KeyboardAvoidingView>
+
+          <View className="flex-row justify-between items-center px-6 pb-6">
+            {step > 1 ? (
+              <TouchableOpacity onPress={() => handleStepChange(step - 1)} className="flex-row items-center bg-white border border-blue-300 px-6 py-3 rounded-full shadow">
+                <Ionicons name="chevron-back" size={20} color="#2563eb" />
+                <Text className="text-blue-600 font-semibold ml-1">Previous</Text>
+              </TouchableOpacity>
+            ) : <View />}
+
+            {step < totalSteps ? (
+              <TouchableOpacity onPress={() => handleStepChange(step + 1)} className={`flex-row items-center ${isStepValid() ? 'bg-blue-600' : 'bg-gray-400'} px-6 py-3 rounded-full shadow`} disabled={!isStepValid()}>
+                <Text className="text-white font-semibold mr-1">Next</Text>
+                <Ionicons name="chevron-forward" size={20} color="white" />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity onPress={handleSubmit} disabled={!isStepValid()} className={`${isStepValid() ? 'bg-green-600' : 'bg-gray-400'} px-6 py-3 rounded-full shadow`}>
+                <Text className="text-white font-semibold">Submit</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <Modal visible={showCart} animationType="slide" onRequestClose={() => setShowCart(false)}>
+            <SafeAreaView className="flex-1 bg-white p-4">
+              <Text className="text-lg font-bold mb-4">Cart Items</Text>
+              <FlatList
+                data={cart}
+                keyExtractor={(_, i) => i.toString()}
+                renderItem={({ item, index }) => (
+                  <View className="flex-row justify-between items-center mb-2 border-b pb-2">
+                    <View>
+                      <Text>{item.itemName}</Text>
+                      <Text>Qty: {item.quantity}</Text>
+                      <Text>₹ {item.amount}</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => deleteCartItem(index)} className="px-3 py-1 bg-red-500 rounded-xl">
+                      <Text className="text-white">Delete</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              />
+              <TouchableOpacity onPress={() => setShowCart(false)} className="mt-4 px-6 py-3 bg-blue-600 rounded-full">
+                <Text className="text-white font-semibold text-center">Close</Text>
+              </TouchableOpacity>
+            </SafeAreaView>
+          </Modal>
+        </LinearGradient>
+      </SafeAreaView>
+    </TouchableWithoutFeedback>
   );
 }
