@@ -1,9 +1,7 @@
-// full updated code with isStepValid logic for form navigation
-
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   FlatList,
@@ -24,7 +22,8 @@ import Animated, {
   SlideOutLeft,
   SlideOutRight,
 } from 'react-native-reanimated';
-import ToastManager, { Toast } from 'toastify-react-native';
+import Toast from 'react-native-toast-message';
+import axiosInstance from '../../src/Components/utils/axios';
 
 const totalSteps = 3;
 
@@ -38,6 +37,7 @@ export default function Index() {
   const [pending, setPending] = useState();
   const [cart, setCart] = useState([]);
   const [showCart, setShowCart] = useState(false);
+  const router = useRouter()
 
   const [form, setForm] = useState({
     customerId: '',
@@ -50,32 +50,61 @@ export default function Index() {
     cashPayment: '',
   });
 
-  const handleSubmit = async() => {
-    const token = await AsyncStorage.getItem('userToken');
-    const payload = {
-      customerId: form.selectedCustomerId,
-      items: cart.map(({ itemId, quantity, amount }) => ({
-        itemId,
-        quantity,
-        amount,
-      })),
-      totalAmount: cart.reduce((sum, item) => sum + item.amount, 0),
-      payment: {
-        cash: Number(form.cashPayment),
-        online: Number(form.onlinePayment),
-      },
-      date: new Date(),
-    };
-    try {
-      await axios.post(`${process.env.EXPO_PUBLIC_API}/order`, payload, {
-          headers: { Authorization: token },
-        });
-        Toast.success("Order Added Successfully");
-        resetForm();
-    } catch (error) {
-      console.log(error)
-    }
+const handleSubmit = async () => {
+  const token = await AsyncStorage.getItem('userToken');
+  if (!token) {
+    Toast.show({
+      type:"error",
+      text1:'User token missing'
+    });
+    return;
   }
+
+  if (!form.selectedCustomerId || cart.length === 0) {
+    Toast.show({
+      type:"error",
+      text1:'Missing customer or cart information',
+    });
+    return;
+  }
+
+  const payload = {
+    customerId: form.selectedCustomerId,
+    items: cart.map(({ itemId, quantity, amount }) => ({
+      itemId,
+      quantity,
+      amount,
+    })),
+    totalAmount: cart.reduce((sum, item) => sum + item.amount, 0),
+    payment: {
+      cash: Number(form.cashPayment),
+      online: Number(form.onlinePayment),
+    },
+    date: new Date(),
+  };
+
+  try {
+    const res = await axiosInstance.post('/order', payload, {
+      headers: { Authorization: token },
+    });
+    Toast.show({
+      type: 'success',
+      text1: 'Order Added Successfully',
+    });
+    resetForm();
+  } catch (error) {
+    const errMsg =
+      error?.response?.data?.errors?.[0]?.message ||
+      error?.response?.data?.message ||
+      error.message ||
+      'Something went wrong';
+    Toast.show({
+      type:"error",
+      text1:errMsg
+    });
+    console.log(error);
+  }
+};
 
   const resetForm = () => {
     setForm({
@@ -113,8 +142,8 @@ export default function Index() {
     const fetchData = async () => {
       const token = await AsyncStorage.getItem('userToken');
       try {
-        const res1 = await axios.get(`${process.env.EXPO_PUBLIC_API}/customers?view=true`, { headers: { Authorization: token } });
-        const res2 = await axios.get(`${process.env.EXPO_PUBLIC_API}/items?view=true`, { headers: { Authorization: token } });
+        const res1 = await axiosInstance.get("/customers?view=true", { headers: { Authorization: token } });
+        const res2 = await axiosInstance.get("/items?view=true", { headers: { Authorization: token } });
         setCustomers(Array.isArray(res1.data) ? res1.data : res1.data.data || []);
         setItems(res2.data.data.items);
       } catch (error) {
@@ -124,19 +153,38 @@ export default function Index() {
     fetchData();
   }, []);
 
-  const addItemToCart = () => {
-    if (!form.selectedItemId || !form.quantity || !form.price) return;
-    const item = items.find((i) => i._id === form.selectedItemId);
-    const newItem = {
-      itemId: form.selectedItemId,
-      itemName: item?.name || form.itemName,
-      quantity: Number(form.quantity),
-      amount: Number(form.price),
-    };
-    setCart((prev) => [...prev, newItem]);
-    setForm((prev) => ({ ...prev, itemName: '', selectedItemId: '', quantity: '', price: '' }));
-    Toast.success('Item added to cart');
+ const addItemToCart = () => {
+  if (!form.selectedItemId || !form.quantity || !form.price) {
+    Toast.show({
+      type:"error",
+      text1:'Missing item details'
+    });
+    return;
+  }
+
+  const isDuplicate = cart.some((i) => i.itemId === form.selectedItemId);
+  if (isDuplicate) {
+    Toast.show({
+      type:"error",
+      text1:'Item already added'
+    });
+    return;
+  }
+
+  const item = items.find((i) => i._id === form.selectedItemId);
+  const newItem = {
+    itemId: form.selectedItemId,
+    itemName: item?.name || form.itemName,
+    quantity: Number(form.quantity),
+    amount: Number(form.price),
   };
+  setCart((prev) => [...prev, newItem]);
+  setForm((prev) => ({ ...prev, itemName: '', selectedItemId: '', quantity: '', price: '' }));
+  Toast.show({
+      type: 'success',
+      text1: 'Item added to cart',
+    });
+};
 
   const deleteCartItem = (index) => {
     cart.length === 1 ? (setShowCart(false),handleStepChange(2))  : null;
@@ -313,7 +361,9 @@ export default function Index() {
           <View className="w-full h-2 bg-white/30 rounded-full">
             <View className="h-2 bg-white rounded-full" style={{ width: `${(step / totalSteps) * 100}%` }} />
           </View>
-
+          <TouchableOpacity className='absolute left-2 top-10' onPress={()=>{router.push("/Home/Profile")}}>
+            <Ionicons name='person-circle' size={40} color="white"/>
+          </TouchableOpacity>
           {cart.length > 0 && (
             <TouchableOpacity
               onPress={() => setShowCart(true)}
@@ -325,7 +375,7 @@ export default function Index() {
           )}
 
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
-            <ToastManager />
+            
             <Animated.View
               key={step}
               className="flex-1 px-6 py-6"
@@ -383,6 +433,7 @@ export default function Index() {
             </SafeAreaView>
           </Modal>
         </LinearGradient>
+        <Toast />
       </SafeAreaView>
     </TouchableWithoutFeedback>
   );

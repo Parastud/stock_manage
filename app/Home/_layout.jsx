@@ -10,6 +10,8 @@ export default function MainLayout() {
                 ),
             }}
             />
+            <Tabs.Screen name='Profile' options={{ href: null }}
+            />
         </Tabs>
     )
 }
