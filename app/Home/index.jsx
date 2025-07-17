@@ -10,12 +10,14 @@ import {
   Modal,
   Platform,
   SafeAreaView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
+import { Dropdown } from 'react-native-element-dropdown';
 import Animated, {
   SlideInLeft,
   SlideInRight,
@@ -32,94 +34,107 @@ export default function Index() {
   const [direction, setDirection] = useState('next');
   const [customers, setCustomers] = useState([]);
   const [items, setItems] = useState([]);
-  const [isCustomerFocused, setIsCustomerFocused] = useState(false);
-  const [isItemFocused, setIsItemFocused] = useState(false);
+  const [isCustomerFocus, setIsCustomerFocus] = useState(false);
+  const [isItemFocus, setIsItemFocus] = useState(false);
   const [pending, setPending] = useState();
   const [cart, setCart] = useState([]);
   const [showCart, setShowCart] = useState(false);
   const router = useRouter()
+  const [temp, settemp] = useState([])
 
   const [form, setForm] = useState({
     customerId: '',
-    selectedCustomerId: '',
-    itemName: '',
-    selectedItemId: '',
+    itemId: '',
     quantity: '',
     price: '',
     onlinePayment: '',
     cashPayment: '',
   });
 
-const handleSubmit = async () => {
-  const token = await AsyncStorage.getItem('userToken');
-  if (!token) {
-    Toast.show({
-      type:"error",
-      text1:'User token missing'
-    });
-    return;
-  }
+  const handleSubmit = async () => {
+    const token = await AsyncStorage.getItem('userToken');
+    if (!token) {
+      Toast.show({
+        type: "error",
+        text1: 'User token missing'
+      });
+      return;
+    }
 
-  if (!form.selectedCustomerId || cart.length === 0) {
-    Toast.show({
-      type:"error",
-      text1:'Missing customer or cart information',
-    });
-    return;
-  }
+    if (!form.customerId || cart.length === 0) {
+      Toast.show({
+        type: "error",
+        text1: 'Missing customer or cart information',
+      });
+      return;
+    }
 
-  const payload = {
-    customerId: form.selectedCustomerId,
-    items: cart.map(({ itemId, quantity, amount }) => ({
-      itemId,
-      quantity,
-      amount,
-    })),
-    totalAmount: cart.reduce((sum, item) => sum + item.amount, 0),
-    payment: {
-      cash: Number(form.cashPayment),
-      online: Number(form.onlinePayment),
-    },
-    date: new Date(),
+
+    const payload = {
+      customerId: form.customerId,
+      items: cart.map(({ itemId, quantity, amount }) => ({
+        itemId,
+        quantity,
+        amount,
+      })),
+      totalAmount: cart.reduce((sum, item) => sum + item.amount, 0),
+      payment: {
+        cash: Number(form.cashPayment),
+        online: Number(form.onlinePayment),
+      },
+      date: new Date(),
+    };
+
+
+    try {
+      const res = await axiosInstance.post('/order', payload, {
+        headers: { Authorization: token },
+      });
+      Toast.show({
+        type: 'success',
+        text1: 'Order Added Successfully',
+      });
+      resetForm();
+      fetchData();
+      const responseData = res.data.data;
+      router.push({
+        pathname: "/Home/Reciept",
+        params: {
+          ...responseData,
+          cart:JSON.stringify(temp),
+          items: JSON.stringify(responseData.items),
+          payment: JSON.stringify(responseData.payment),
+        }
+      });
+
+    } catch (error) {
+      const errMsg =
+        error?.response?.data?.errors?.[0]?.message ||
+        error?.response?.data?.message ||
+        error.message ||
+        'Something went wrong';
+      Toast.show({
+        type: "error",
+        text1: errMsg
+      });
+      console.log(error);
+    }
   };
-
-  try {
-    const res = await axiosInstance.post('/order', payload, {
-      headers: { Authorization: token },
-    });
-    Toast.show({
-      type: 'success',
-      text1: 'Order Added Successfully',
-    });
-    resetForm();
-  } catch (error) {
-    const errMsg =
-      error?.response?.data?.errors?.[0]?.message ||
-      error?.response?.data?.message ||
-      error.message ||
-      'Something went wrong';
-    Toast.show({
-      type:"error",
-      text1:errMsg
-    });
-    console.log(error);
-  }
-};
 
   const resetForm = () => {
     setForm({
       customerId: '',
-      selectedCustomerId: '',
-      itemName: '',
-      selectedItemId: '',
+      itemId: '',
       quantity: '',
       price: '',
       onlinePayment: '',
       cashPayment: '',
     });
+    settemp(cart)
     setCart([]);
     setStep(1);
-  }
+  };
+
 
   const inputClass =
     'bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 w-full text-base';
@@ -128,8 +143,8 @@ const handleSubmit = async () => {
     setForm((prev) => ({
       ...prev,
       [key]: value,
-      ...(resetId && key === 'customerId' ? { selectedCustomerId: '' } : {}),
-      ...(resetId && key === 'itemName' ? { selectedItemId: '' } : {}),
+      ...(resetId && key === 'customerId' ? { customerId: '' } : {}),
+      ...(resetId && key === 'itemName' ? { itemId: '' } : {}),
     }));
   };
 
@@ -138,62 +153,64 @@ const handleSubmit = async () => {
     setStep(newStep);
   };
 
+  const fetchData = async () => {
+    const token = await AsyncStorage.getItem('userToken');
+    try {
+      const res1 = await axiosInstance.get("/customers?view=true", { headers: { Authorization: token } });
+      const res2 = await axiosInstance.get("/items?view=true", { headers: { Authorization: token } });
+      setCustomers(Array.isArray(res1.data) ? res1.data : res1.data.data || []);
+      setItems(res2.data.data.items || []);
+    } catch (error) {
+      // console.error(error);
+    }
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      const token = await AsyncStorage.getItem('userToken');
-      try {
-        const res1 = await axiosInstance.get("/customers?view=true", { headers: { Authorization: token } });
-        const res2 = await axiosInstance.get("/items?view=true", { headers: { Authorization: token } });
-        setCustomers(Array.isArray(res1.data) ? res1.data : res1.data.data || []);
-        setItems(res2.data.data.items);
-      } catch (error) {
-        console.error(error);
-      }
-    };
     fetchData();
   }, []);
 
- const addItemToCart = () => {
-  if (!form.selectedItemId || !form.quantity || !form.price) {
-    Toast.show({
-      type:"error",
-      text1:'Missing item details'
-    });
-    return;
-  }
+  const addItemToCart = () => {
+    if (!form.itemId || !form.quantity || !form.price) {
+      Toast.show({
+        type: "error",
+        text1: 'Missing item details'
+      });
+      return;
+    }
 
-  const isDuplicate = cart.some((i) => i.itemId === form.selectedItemId);
-  if (isDuplicate) {
-    Toast.show({
-      type:"error",
-      text1:'Item already added'
-    });
-    return;
-  }
+    const isDuplicate = cart.some((i) => i.itemId === form.itemId);
+    if (isDuplicate) {
+      Toast.show({
+        type: "error",
+        text1: 'Item already added'
+      });
+      return;
+    }
 
-  const item = items.find((i) => i._id === form.selectedItemId);
-  const newItem = {
-    itemId: form.selectedItemId,
-    itemName: item?.name || form.itemName,
-    quantity: Number(form.quantity),
-    amount: Number(form.price),
-  };
-  setCart((prev) => [...prev, newItem]);
-  setForm((prev) => ({ ...prev, itemName: '', selectedItemId: '', quantity: '', price: '' }));
-  Toast.show({
+    const item = items.find((i) => i._id === form.itemId);
+    const newItem = {
+      itemId: form.itemId,
+      itemName: item?.name || '',
+      quantity: Number(form.quantity),
+      amount: Number(form.price),
+    };
+
+    setCart((prev) => [...prev, newItem]);
+    setForm((prev) => ({ ...prev, itemName: '', itemId: '', quantity: '', price: '' }));
+    Toast.show({
       type: 'success',
       text1: 'Item added to cart',
     });
-};
+  };
 
   const deleteCartItem = (index) => {
-    cart.length === 1 ? (setShowCart(false),handleStepChange(2))  : null;
+    cart.length === 1 ? (setShowCart(false), handleStepChange(2)) : null;
     setCart((prev) => prev.filter((_, i) => i !== index));
   };
 
   const isStepValid = () => {
     if (step === 1) {
-      return form.customerId.trim() !== '' && form.selectedCustomerId.trim() !== '';
+      return form.customerId.trim() !== '';
     }
     if (step === 2) {
       return cart.length > 0;
@@ -206,88 +223,69 @@ const handleSubmit = async () => {
 
   const renderStep = () => {
     if (step === 1) {
-      const filteredCustomers = form.customerId.trim()
-        ? customers.filter((cust) => cust.name.toLowerCase().includes(form.customerId.toLowerCase()))
-        : customers.slice(0, 5);
-
       return (
         <View className="space-y-4">
-          <Text className="text-gray-700 font-semibold">Search Customer</Text>
-          <View className="relative w-full">
-            <TextInput
-              className={inputClass}
-              placeholder="Search or enter customer name"
-              value={form.customerId}
-              onFocus={() => setIsCustomerFocused(true)}
-              onBlur={() => setTimeout(() => setIsCustomerFocused(false), 100)}
-              onChangeText={(val) => handleChange('customerId', val, true)}
-            />
-            {isCustomerFocused && (
-              <View className="absolute z-50 bg-white rounded-xl shadow top-16 left-0 right-0 border border-gray-300 max-h-48">
-                {filteredCustomers.length > 0 ? (
-                  filteredCustomers.map((cust, i) => (
-                    <TouchableOpacity
-                      key={cust._id || i}
-                      onPress={() => {
-                        handleChange('customerId', cust.name);
-                        setForm((prev) => ({ ...prev, selectedCustomerId: cust._id }));
-                        setPending(cust.totalPendingAmount);
-                        setIsCustomerFocused(false);
-                      }}
-                      className="px-4 py-3 border-b border-gray-100"
-                    >
-                      <Text>{cust.name}</Text>
-                    </TouchableOpacity>
-                  ))
-                ) : (
-                  <Text className="p-4 text-gray-500">No customers found</Text>
-                )}
-              </View>
-            )}
-          </View>
+          <Text className="text-gray-700 font-semibold">Select Customer</Text>
+          <Dropdown
+            style={[styles.dropdown, isCustomerFocus && { borderColor: '#2563eb', borderWidth: 2 }]}
+            placeholderStyle={styles.placeholderStyle}
+            selectedTextStyle={styles.selectedTextStyle}
+            inputSearchStyle={styles.inputSearchStyle}
+            iconStyle={styles.iconStyle}
+            data={customers}
+            search
+            maxHeight={300}
+            labelField="name"
+            valueField="_id"
+            placeholder={!isCustomerFocus ? 'Select Customer' : ''}
+            searchPlaceholder="Search customer..."
+            value={form.customerId}
+            onFocus={() => setIsCustomerFocus(true)}
+            onBlur={() => setIsCustomerFocus(false)}
+            onChange={(item) => {
+              setForm((prev) => ({
+                ...prev,
+                customerId: item._id,
+              }));
+              setPending(item.totalPendingAmount);
+              setIsCustomerFocus(false);
+            }}
+          />
+
         </View>
       );
     }
 
-    if (step === 2) {
-      const filteredItems = form.itemName.trim()
-        ? items.filter((item) => item.name.toLowerCase().includes(form.itemName.toLowerCase()))
-        : items.slice(0, 5);
 
+    if (step === 2) {
       return (
         <View className="space-y-4">
-          <Text className="text-gray-700 font-semibold">Item Name</Text>
-          <View className="relative w-full">
-            <TextInput
-              className={inputClass}
-              placeholder="Search or enter item name"
-              value={form.itemName}
-              onFocus={() => setIsItemFocused(true)}
-              onBlur={() => setTimeout(() => setIsItemFocused(false), 100)}
-              onChangeText={(val) => handleChange('itemName', val, true)}
-            />
-            {isItemFocused && (
-              <View className="absolute z-50 bg-white rounded-xl shadow top-16 left-0 right-0 border border-gray-300 max-h-48">
-                {filteredItems.length > 0 ? (
-                  filteredItems.map((item, i) => (
-                    <TouchableOpacity
-                      key={item._id || i}
-                      onPress={() => {
-                        handleChange('itemName', item.name);
-                        setForm((prev) => ({ ...prev, selectedItemId: item._id }));
-                        setIsItemFocused(false);
-                      }}
-                      className="px-4 py-3 border-b border-gray-100"
-                    >
-                      <Text>{item.name}</Text>
-                    </TouchableOpacity>
-                  ))
-                ) : (
-                  <Text className="p-4 text-gray-500">No items found</Text>
-                )}
-              </View>
-            )}
-          </View>
+          <Text className="text-gray-700 font-semibold">Select Item</Text>
+          <Dropdown
+            style={[styles.dropdown, isItemFocus && { borderColor: '#2563eb', borderWidth: 2 }]}
+            placeholderStyle={styles.placeholderStyle}
+            selectedTextStyle={styles.selectedTextStyle}
+            inputSearchStyle={styles.inputSearchStyle}
+            iconStyle={styles.iconStyle}
+            data={items}
+            search
+            maxHeight={300}
+            labelField="name"
+            valueField="_id"
+            placeholder={!isItemFocus ? 'Select Item' : '...'}
+            searchPlaceholder="Search item..."
+            onFocus={() => setIsItemFocus(true)}
+            onBlur={() => setIsItemFocus(false)}
+            onChange={(item) => {
+              setForm((prev) => ({
+                ...prev,
+                itemId: item._id,
+              }));
+              setIsItemFocus(false);
+            }}
+            value={form.itemId}
+
+          />
 
           <Text className="text-gray-700 font-semibold">Quantity</Text>
           <TextInput
@@ -315,16 +313,18 @@ const handleSubmit = async () => {
               handleChange('price', numericVal);
             }}
           />
+
           <TouchableOpacity
             onPress={addItemToCart}
-            className={`${!form.selectedItemId || !form.quantity || !form.price ? `bg-gray-400` : `bg-blue-600`} rounded-xl px-6 py-3 mt-2`}
-            disabled={!form.selectedItemId || !form.quantity || !form.price}
+            className={`${!form.itemId || !form.quantity || !form.price ? `bg-gray-400` : `bg-blue-600`} rounded-xl px-6 py-3 mt-2`}
+            disabled={!form.itemId || !form.quantity || !form.price}
           >
             <Text className="text-white text-center font-bold">Add Item</Text>
           </TouchableOpacity>
         </View>
       );
     }
+
 
     if (step === 3) {
       const total = cart.reduce((acc, cur) => acc + parseInt(cur.amount || 0), 0);
@@ -333,7 +333,7 @@ const handleSubmit = async () => {
       return (
         <View className="space-y-4">
           <Text className="text-gray-700 font-semibold">Customer Debt</Text>
-          <TextInput className="bg-gray-200 px-4 py-3 rounded-xl" value={String(pending || '')} editable={false} />
+          <TextInput className="bg-gray-200 px-4 py-3 rounded-xl" value={String(pending)} editable={false} />
 
           <Text className="text-gray-700 font-semibold">Final Bill</Text>
           <TextInput className="bg-gray-200 px-4 py-3 rounded-xl" value={String(finalBill)} editable={false} />
@@ -354,15 +354,15 @@ const handleSubmit = async () => {
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <SafeAreaView className="flex-1 bg-white">
-        <LinearGradient colors={["#2563eb", "#3b82f6"]} className="px-6 pt-14 pb-6 rounded-b-3xl shadow-md h-full">
+        <LinearGradient colors={["#13545c", "#07363C"]} className="px-6 pt-14 pb-6 rounded-b-3xl shadow-md h-full">
           <Text className="text-white font-bold text-xl text-center">Stock Management</Text>
           <Text className="text-white mt-1 text-sm mb-3 text-center">Step {step} of {totalSteps}</Text>
 
           <View className="w-full h-2 bg-white/30 rounded-full">
             <View className="h-2 bg-white rounded-full" style={{ width: `${(step / totalSteps) * 100}%` }} />
           </View>
-          <TouchableOpacity className='absolute left-2 top-10' onPress={()=>{router.push("/Home/Profile")}}>
-            <Ionicons name='person-circle' size={40} color="white"/>
+          <TouchableOpacity className='absolute left-2 top-10' onPress={() => { router.push("/Home/Profile") }}>
+            <Ionicons name='person-circle' size={40} color="white" />
           </TouchableOpacity>
           {cart.length > 0 && (
             <TouchableOpacity
@@ -375,7 +375,7 @@ const handleSubmit = async () => {
           )}
 
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
-            
+
             <Animated.View
               key={step}
               className="flex-1 px-6 py-6"
@@ -438,3 +438,49 @@ const handleSubmit = async () => {
     </TouchableWithoutFeedback>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: 'white',
+    padding: 16,
+  },
+  dropdown: {
+    height: 50,
+    borderColor: '#ccc',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    backgroundColor: 'white',
+  },
+  icon: {
+    marginRight: 5,
+  },
+  label: {
+    position: 'absolute',
+    backgroundColor: 'white',
+    left: 22,
+    top: 8,
+    zIndex: 999,
+    paddingHorizontal: 8,
+    fontSize: 14,
+  },
+  placeholderStyle: {
+    fontSize: 16,
+    color: '#999',
+  },
+  selectedTextStyle: {
+    fontSize: 16,
+    color: '#111',
+  },
+  inputSearchStyle: {
+    height: 40,
+    fontSize: 16,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+  },
+  iconStyle: {
+    width: 20,
+    height: 20,
+  },
+});
