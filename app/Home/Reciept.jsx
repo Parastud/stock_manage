@@ -4,6 +4,7 @@ import { useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import moment from 'moment';
 import { Alert, Button, ScrollView, StyleSheet, Text, View } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function Reciept() {
@@ -123,25 +124,25 @@ Items: ${cart
                     <Text style={styles.value}>Online: ₹{payment.online ?? 'N/A'}</Text>
                 </View>
 
-                {/* <View style={styles.section}>
+                <View style={styles.section}>
                     <Text style={styles.label}>Items:</Text>
                     {console.log(cart)}
                     {Array.isArray(cart) && cart.length > 0 ? (
                         cart.map((item, index) => (
                             <Text key={item.itemId?._id || index} style={styles.item}>
-                                {item.itemId?.name ?? 'Unnamed'} - Qty: {item.quantity} - ₹{item.amount}
+                                {item.itemName ?? 'Unnamed'} - Qty: {item.quantity} - ₹{item.amount}
                             </Text>
                         ))
                     ) : (
                         <Text style={styles.value}>No items found</Text>
                     )}
-                </View> */}
+                </View>
 
                 {/* QR Code */}
-                {/* <View style={styles.section}>
+                <View style={styles.section}>
                     <Text style={styles.label}>QR Code (Order ID):</Text>
                     <QRCode value={params._id ?? 'N/A'} size={120} />
-                </View> */}
+                </View>
 
                 {/* Buttons */}
                 <View style={styles.section}>

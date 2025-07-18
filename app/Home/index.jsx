@@ -335,7 +335,10 @@ export default function Index() {
           <Text className="text-gray-700 font-semibold">Customer Debt</Text>
           <TextInput className="bg-gray-200 px-4 py-3 rounded-xl" value={String(pending)} editable={false} />
 
-          <Text className="text-gray-700 font-semibold">Final Bill</Text>
+          <Text className="text-gray-700 font-semibold">Bill</Text>
+          <TextInput className="bg-gray-200 px-4 py-3 rounded-xl" value={String(total)} editable={false} />
+
+          <Text className="text-gray-700 font-semibold">Final Amount to be Paid</Text>
           <TextInput className="bg-gray-200 px-4 py-3 rounded-xl" value={String(finalBill)} editable={false} />
 
           <Text className="text-gray-700 font-semibold">Online Payment</Text>
