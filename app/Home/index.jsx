@@ -27,7 +27,7 @@ import Animated, {
 import Toast from 'react-native-toast-message';
 import axiosInstance from '../../src/Components/utils/axios';
 
-const totalSteps = 3;
+const totalSteps = 2;
 
 export default function Index() {
   const [step, setStep] = useState(1);
@@ -41,12 +41,11 @@ export default function Index() {
   const [showCart, setShowCart] = useState(false);
   const router = useRouter()
   const [temp, settemp] = useState([])
+  const [CustomerMapping, setCustomerMapping] = useState([])
 
   const [form, setForm] = useState({
     customerId: '',
     itemId: '',
-    quantity: '',
-    price: '',
     onlinePayment: '',
     cashPayment: '',
   });
@@ -101,7 +100,7 @@ export default function Index() {
         pathname: "/Home/Reciept",
         params: {
           ...responseData,
-          cart:JSON.stringify(temp),
+          cart: JSON.stringify(temp),
           items: JSON.stringify(responseData.items),
           payment: JSON.stringify(responseData.payment),
         }
@@ -117,7 +116,6 @@ export default function Index() {
         type: "error",
         text1: errMsg
       });
-      console.log(error);
     }
   };
 
@@ -125,8 +123,6 @@ export default function Index() {
     setForm({
       customerId: '',
       itemId: '',
-      quantity: '',
-      price: '',
       onlinePayment: '',
       cashPayment: '',
     });
@@ -157,11 +153,14 @@ export default function Index() {
     const token = await AsyncStorage.getItem('userToken');
     try {
       const res1 = await axiosInstance.get("/customers?view=true", { headers: { Authorization: token } });
-      const res2 = await axiosInstance.get("/items?view=true", { headers: { Authorization: token } });
+      const res2 = await axiosInstance.get("/customerItemMappings?view=true", { headers: { Authorization: token } });
       setCustomers(Array.isArray(res1.data) ? res1.data : res1.data.data || []);
-      setItems(res2.data.data.items || []);
+      setCustomerMapping(res2.data.data.items)
     } catch (error) {
-      // console.error(error);
+      Toast.show({
+        type: "error",
+        text1: error
+      });
     }
   };
 
@@ -210,12 +209,9 @@ export default function Index() {
 
   const isStepValid = () => {
     if (step === 1) {
-      return form.customerId.trim() !== '';
+      return form.customerId.trim() !== '' && cart.length > 0;;
     }
     if (step === 2) {
-      return cart.length > 0;
-    }
-    if (step === 3) {
       return form.onlinePayment.trim() !== '' && form.cashPayment.trim() !== '';
     }
     return false;
@@ -249,18 +245,12 @@ export default function Index() {
               }));
               setPending(item.totalPendingAmount);
               setIsCustomerFocus(false);
+              setItems(
+                CustomerMapping.filter((x) => x.customerId?._id === item._id)
+              );
             }}
           />
-
-        </View>
-      );
-    }
-
-
-    if (step === 2) {
-      return (
-        <View className="space-y-4">
-          <Text className="text-gray-700 font-semibold">Select Item</Text>
+          <Text className="text-gray-700 font-semibold">Select Mapping</Text>
           <Dropdown
             style={[styles.dropdown, isItemFocus && { borderColor: '#2563eb', borderWidth: 2 }]}
             placeholderStyle={styles.placeholderStyle}
@@ -270,7 +260,7 @@ export default function Index() {
             data={items}
             search
             maxHeight={300}
-            labelField="name"
+            labelField="itemId.name"
             valueField="_id"
             placeholder={!isItemFocus ? 'Select Item' : '...'}
             searchPlaceholder="Search item..."
@@ -284,40 +274,24 @@ export default function Index() {
               setIsItemFocus(false);
             }}
             value={form.itemId}
-
-          />
-
-          <Text className="text-gray-700 font-semibold">Quantity</Text>
-          <TextInput
-            className={inputClass}
-            placeholder="Enter Quantity"
-            maxLength={10}
-            keyboardType="numeric"
-            value={form.quantity}
-            onChangeText={(val) => {
-              const numericVal = val.replace(/[^0-9]/g, '');
-              handleChange('quantity', numericVal);
-            }}
-          />
-
-          <Text className="text-gray-700 font-semibold">Price</Text>
-          <TextInput
-            className={inputClass}
-            placeholder="Enter Price"
-            maxLength={10}
-            keyboardType="decimal-pad"
-            value={form.price}
-            onChangeText={(val) => {
-              const numericVal = val.replace(/[^0-9.]/g, '')
-                .replace(/^(\d*\.\d*).*$/, '$1');
-              handleChange('price', numericVal);
-            }}
+            renderItem={(item) => (
+              <View style={{ padding: 10 }}>
+                <Text>
+                  Item: {item.itemId.name} | Quantity: {item.quantity} | Price: ₹{item.price}
+                </Text>
+              </View>
+            )}
+            selectedTextProps={(item) => (
+              <Text style={styles.selectedTextStyle}>
+                {item.itemId.name} - ₹{item.price}
+              </Text>
+            )}
           />
 
           <TouchableOpacity
             onPress={addItemToCart}
-            className={`${!form.itemId || !form.quantity || !form.price ? `bg-gray-400` : `bg-blue-600`} rounded-xl px-6 py-3 mt-2`}
-            disabled={!form.itemId || !form.quantity || !form.price}
+            className={`${!form.itemId ? `bg-gray-400` : `bg-blue-600`} rounded-xl px-6 py-3 mt-2`}
+            disabled={!form.itemId}
           >
             <Text className="text-white text-center font-bold">Add Item</Text>
           </TouchableOpacity>
@@ -326,7 +300,7 @@ export default function Index() {
     }
 
 
-    if (step === 3) {
+    if (step === 2) {
       const total = cart.reduce((acc, cur) => acc + parseInt(cur.amount || 0), 0);
       const finalBill = (pending || 0) + total;
 
