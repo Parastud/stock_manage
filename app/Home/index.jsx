@@ -158,7 +158,7 @@ export default function Index() {
     } catch (error) {
       Toast.show({
         type: "error",
-        text1: error
+        text1: "Unable to Connect"
       });
     }
   };
