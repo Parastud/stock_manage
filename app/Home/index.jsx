@@ -40,7 +40,6 @@ export default function Index() {
   const [cart, setCart] = useState([]);
   const [showCart, setShowCart] = useState(false);
   const router = useRouter()
-  const [temp, settemp] = useState([])
   const [CustomerMapping, setCustomerMapping] = useState([])
 
   const [form, setForm] = useState({
@@ -100,9 +99,10 @@ export default function Index() {
         pathname: "/Home/Reciept",
         params: {
           ...responseData,
-          cart: JSON.stringify(temp),
+          cart: JSON.stringify(cart),
           items: JSON.stringify(responseData.items),
           payment: JSON.stringify(responseData.payment),
+          customername: customers.find(i => form.customerId == i._id)?.name
         }
       });
 
@@ -126,7 +126,6 @@ export default function Index() {
       onlinePayment: '',
       cashPayment: '',
     });
-    settemp(cart)
     setCart([]);
     setStep(1);
   };
@@ -169,15 +168,15 @@ export default function Index() {
   }, []);
 
   const addItemToCart = () => {
-    if (!form.itemId || !form.quantity || !form.price) {
+    if (!form.itemId) {
       Toast.show({
         type: "error",
         text1: 'Missing item details'
       });
       return;
     }
-
-    const isDuplicate = cart.some((i) => i.itemId === form.itemId);
+    
+    const isDuplicate = cart.some((i) => i._id == form.itemId);
     if (isDuplicate) {
       Toast.show({
         type: "error",
@@ -188,10 +187,11 @@ export default function Index() {
 
     const item = items.find((i) => i._id === form.itemId);
     const newItem = {
-      itemId: form.itemId,
-      itemName: item?.name || '',
-      quantity: Number(form.quantity),
-      amount: Number(form.price),
+      itemId: item.itemId,
+      itemName: item?.itemId.name || '',
+      quantity: Number(item.quantity),
+      amount: Number(item.price),
+      _id : item._id
     };
 
     setCart((prev) => [...prev, newItem]);
@@ -306,11 +306,11 @@ export default function Index() {
 
       return (
         <View className="space-y-4">
-          <Text className="text-gray-700 font-semibold">Customer Debt</Text>
-          <TextInput className="bg-gray-200 px-4 py-3 rounded-xl" value={String(pending)} editable={false} />
-
           <Text className="text-gray-700 font-semibold">Bill</Text>
           <TextInput className="bg-gray-200 px-4 py-3 rounded-xl" value={String(total)} editable={false} />
+          
+          <Text className="text-gray-700 font-semibold">Customer Debt</Text>
+          <TextInput className="bg-gray-200 px-4 py-3 rounded-xl" value={String(pending)} editable={false} />
 
           <Text className="text-gray-700 font-semibold">Final Amount to be Paid</Text>
           <TextInput className="bg-gray-200 px-4 py-3 rounded-xl" value={String(finalBill)} editable={false} />
