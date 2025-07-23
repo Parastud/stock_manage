@@ -61,9 +61,9 @@ export default function App() {
       enableOnAndroid
       keyboardShouldPersistTaps="handled"
       extraScrollHeight={Platform.OS === 'ios' ? 20 : 0}
-      className='bg-blue-600'
-    >
-      <SafeAreaView className="flex-1 bg-blue-600 items-center justify-center px-6">
+      className='bg-[#07363C]'
+    > 
+      <SafeAreaView className="flex-1 bg-[#07363C] items-center justify-center px-6">
         {/* Logo */}
         <View className="rounded-2xl overflow-hidden mb-6">
           <Image source={require('../../assets/images/playstore.png')} width={100} height={100}/>
