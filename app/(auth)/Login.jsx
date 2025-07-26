@@ -40,8 +40,9 @@ export default function App() {
 
       const token = response?.data?.data?.token;
       if (!token) throw new Error('Invalid response');
-
+      const timestamp = new Date().getTime();
       await AsyncStorage.setItem('userToken', token);
+      await AsyncStorage.setItem('loginTimestamp', timestamp.toString());
       router.replace('/Home');
     } catch (error) {
       const msg = error?.response?.data?.errors?.[0]?.message;

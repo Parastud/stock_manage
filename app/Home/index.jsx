@@ -291,7 +291,7 @@ export default function Index() {
             )}
           />
           <Text className="text-gray-700 font-semibold">Quantity</Text>
-          <TextInput className={inputClass} value={form.quantity} onChangeText={(val) => handleChange('quantity', val)} />
+          <TextInput className={inputClass} value={form.quantity} keyboardType="numeric" onChangeText={(val) => handleChange('quantity', val)} />
 
           <TouchableOpacity
             onPress={addItemToCart}
