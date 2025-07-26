@@ -45,6 +45,7 @@ export default function Index() {
   const [form, setForm] = useState({
     customerId: '',
     itemId: '',
+    quantity: '',
     onlinePayment: '',
     cashPayment: '',
   });
@@ -123,6 +124,7 @@ export default function Index() {
     setForm({
       customerId: '',
       itemId: '',
+      quantity:'',
       onlinePayment: '',
       cashPayment: '',
     });
@@ -168,14 +170,14 @@ export default function Index() {
   }, []);
 
   const addItemToCart = () => {
-    if (!form.itemId) {
+    if (!form.itemId || !form.quantity) {
       Toast.show({
         type: "error",
         text1: 'Missing item details'
       });
       return;
     }
-    
+
     const isDuplicate = cart.some((i) => i._id == form.itemId);
     if (isDuplicate) {
       Toast.show({
@@ -186,12 +188,13 @@ export default function Index() {
     }
 
     const item = items.find((i) => i._id === form.itemId);
+    const singleitem = item.price / item.quantity
     const newItem = {
       itemId: item.itemId,
       itemName: item?.itemId.name || '',
-      quantity: Number(item.quantity),
-      amount: Number(item.price),
-      _id : item._id
+      quantity: Number(form.quantity),
+      amount: Number(form.quantity*singleitem),
+      _id: item._id
     };
 
     setCart((prev) => [...prev, newItem]);
@@ -203,13 +206,13 @@ export default function Index() {
   };
 
   const deleteCartItem = (index) => {
-    cart.length === 1 ? (setShowCart(false), handleStepChange(2)) : null;
+    cart.length === 1 ? (setShowCart(false), handleStepChange(1)) : null;
     setCart((prev) => prev.filter((_, i) => i !== index));
   };
 
   const isStepValid = () => {
     if (step === 1) {
-      return form.customerId.trim() !== '' && cart.length > 0;;
+      return form.customerId.trim() !== '' && cart.length > 0;
     }
     if (step === 2) {
       return form.onlinePayment.trim() !== '' && form.cashPayment.trim() !== '';
@@ -287,11 +290,13 @@ export default function Index() {
               </Text>
             )}
           />
+          <Text className="text-gray-700 font-semibold">Quantity</Text>
+          <TextInput className={inputClass} value={form.quantity} onChangeText={(val) => handleChange('quantity', val)} />
 
           <TouchableOpacity
             onPress={addItemToCart}
-            className={`${!form.itemId ? `bg-gray-400` : `bg-blue-600`} rounded-xl px-6 py-3 mt-2`}
-            disabled={!form.itemId}
+            className={`${!form.itemId||!form.quantity ? `bg-gray-400` : `bg-blue-600`} rounded-xl px-6 py-3 mt-2`}
+            disabled={!form.itemId||!form.quantity}
           >
             <Text className="text-white text-center font-bold">Add Item</Text>
           </TouchableOpacity>
@@ -308,7 +313,7 @@ export default function Index() {
         <View className="space-y-4">
           <Text className="text-gray-700 font-semibold">Bill</Text>
           <TextInput className="bg-gray-200 px-4 py-3 rounded-xl" value={String(total)} editable={false} />
-          
+
           <Text className="text-gray-700 font-semibold">Customer Debt</Text>
           <TextInput className="bg-gray-200 px-4 py-3 rounded-xl" value={String(pending)} editable={false} />
 
