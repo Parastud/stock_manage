@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
@@ -39,8 +40,13 @@ export default function Index() {
   const [pending, setPending] = useState();
   const [cart, setCart] = useState([]);
   const [showCart, setShowCart] = useState(false);
-  const router = useRouter()
-  const [CustomerMapping, setCustomerMapping] = useState([])
+  const router = useRouter();
+  const [CustomerMapping, setCustomerMapping] = useState([]);
+
+  // Loading states
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
+  const [isLoadingItems, setIsLoadingItems] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [form, setForm] = useState({
     customerId: '',
@@ -48,15 +54,23 @@ export default function Index() {
     quantity: '',
     onlinePayment: '',
     cashPayment: '',
+    defaultQuantityType: '',
+    boxes: ''
   });
+    
+  function roundUpTo50(num) {
+    return Math.ceil(num / 50) * 50;
+  }
 
   const handleSubmit = async () => {
+    setIsSubmitting(true);
     const token = await AsyncStorage.getItem('userToken');
     if (!token) {
       Toast.show({
         type: "error",
         text1: 'User token missing'
       });
+      setIsSubmitting(false);
       return;
     }
 
@@ -65,9 +79,9 @@ export default function Index() {
         type: "error",
         text1: 'Missing customer or cart information',
       });
+      setIsSubmitting(false);
       return;
     }
-
 
     const payload = {
       customerId: form.customerId,
@@ -83,7 +97,6 @@ export default function Index() {
       },
       date: new Date(),
     };
-
 
     try {
       const res = await axiosInstance.post('/order', payload, {
@@ -106,7 +119,6 @@ export default function Index() {
           customername: customers.find(i => form.customerId == i._id)?.name
         }
       });
-
     } catch (error) {
       const errMsg =
         error?.response?.data?.errors?.[0]?.message ||
@@ -117,6 +129,8 @@ export default function Index() {
         type: "error",
         text1: errMsg
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -124,14 +138,17 @@ export default function Index() {
     setForm({
       customerId: '',
       itemId: '',
-      quantity:'',
+      quantity: '',
       onlinePayment: '',
       cashPayment: '',
+      defaultQuantityType: '',
+      boxes: '',
     });
     setCart([]);
     setStep(1);
+    setItems([]);
+    setIsLoadingItems(false);
   };
-
 
   const inputClass =
     'bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 w-full text-base';
@@ -152,16 +169,25 @@ export default function Index() {
 
   const fetchData = async () => {
     const token = await AsyncStorage.getItem('userToken');
+    setIsLoadingCustomers(true);
+
     try {
-      const res1 = await axiosInstance.get("/customers?view=true", { headers: { Authorization: token } });
-      const res2 = await axiosInstance.get("/customerItemMappings?view=true", { headers: { Authorization: token } });
+      const res1 = await axiosInstance.get("/customers?view=true", {
+        headers: { Authorization: token }
+      });
+      const res2 = await axiosInstance.get("/customerItemMappings?view=true", {
+        headers: { Authorization: token }
+      });
+
       setCustomers(Array.isArray(res1.data) ? res1.data : res1.data.data || []);
-      setCustomerMapping(res2.data.data.items)
+      setCustomerMapping(res2.data.data.items);
     } catch (error) {
       Toast.show({
         type: "error",
-        text1: "Unable to Connect"
+        text1: "Issue Occurred"
       });
+    } finally {
+      setIsLoadingCustomers(false);
     }
   };
 
@@ -188,17 +214,26 @@ export default function Index() {
     }
 
     const item = items.find((i) => i._id === form.itemId);
-    const singleitem = item.price / item.quantity
+    const singleitem = item.price / item.quantity;
+    console.log(roundUpTo50(form.quantity * singleitem))
     const newItem = {
       itemId: item.itemId,
       itemName: item?.itemId.name || '',
-      quantity: Number(form.quantity),
-      amount: Number(form.quantity*singleitem),
+      quantity: Math.floor(Number(form.quantity)),
+      amount: roundUpTo50(Number(form.quantity * singleitem)),
       _id: item._id
     };
 
     setCart((prev) => [...prev, newItem]);
-    setForm((prev) => ({ ...prev, itemName: '', itemId: '', quantity: '', price: '' }));
+    setForm((prev) => ({ 
+      ...prev, 
+      itemName: '', 
+      itemId: '', 
+      quantity: '', 
+      boxes: '',
+      defaultQuantityType: '',
+      price: '' 
+    }));
     Toast.show({
       type: 'success',
       text1: 'Item added to cart',
@@ -225,54 +260,91 @@ export default function Index() {
       return (
         <View className="space-y-4">
           <Text className="text-gray-700 font-semibold">Select Customer</Text>
+
           <Dropdown
-            style={[styles.dropdown, isCustomerFocus && { borderColor: '#2563eb', borderWidth: 2 }]}
+            style={[
+              styles.dropdown,
+              isCustomerFocus && { borderColor: '#2563eb', borderWidth: 2 },
+              isLoadingCustomers && styles.dropdownLoading
+            ]}
             placeholderStyle={styles.placeholderStyle}
             selectedTextStyle={styles.selectedTextStyle}
             inputSearchStyle={styles.inputSearchStyle}
             iconStyle={styles.iconStyle}
-            data={customers}
+            data={isLoadingCustomers ? [] : customers}
             search
             maxHeight={300}
             labelField="name"
             valueField="_id"
-            placeholder={!isCustomerFocus ? 'Select Customer' : ''}
+            placeholder={isLoadingCustomers ? 'Loading customers...' : (!isCustomerFocus ? 'Select Customer' : '')}
             searchPlaceholder="Search customer..."
             value={form.customerId}
-            onFocus={() => setIsCustomerFocus(true)}
+            onFocus={() => !isLoadingCustomers && setIsCustomerFocus(true)}
             onBlur={() => setIsCustomerFocus(false)}
+            disable={isLoadingCustomers}
             onChange={(item) => {
               setForm((prev) => ({
                 ...prev,
                 customerId: item._id,
+                defaultQuantityType: '',
+                boxes: '',
+                quantity: '',
+                itemId: ''
               }));
               setPending(item.totalPendingAmount);
               setIsCustomerFocus(false);
-              setItems(
-                CustomerMapping.filter((x) => x.customerId?._id === item._id)
-              );
+              setIsLoadingItems(true);
+
+              setTimeout(() => {
+                setItems(
+                  CustomerMapping.filter((x) => x.customerId?._id === item._id)
+                );
+                setIsLoadingItems(false);
+              }, 300);
             }}
+            renderItem={(item) => (
+              <View style={{ padding: 10 }}>
+                <Text>{item.name}</Text>
+              </View>
+            )}
           />
+
           <Text className="text-gray-700 font-semibold">Select Mapping</Text>
+
           <Dropdown
-            style={[styles.dropdown, isItemFocus && { borderColor: '#2563eb', borderWidth: 2 }]}
+            style={[
+              styles.dropdown,
+              isItemFocus && { borderColor: '#2563eb', borderWidth: 2 },
+              (!form.customerId || isLoadingItems) && styles.dropdownLoading
+            ]}
             placeholderStyle={styles.placeholderStyle}
             selectedTextStyle={styles.selectedTextStyle}
             inputSearchStyle={styles.inputSearchStyle}
             iconStyle={styles.iconStyle}
-            data={items}
+            data={isLoadingItems ? [] : items}
             search
             maxHeight={300}
             labelField="itemId.name"
             valueField="_id"
-            placeholder={!isItemFocus ? 'Select Item' : '...'}
+            placeholder={
+              !form.customerId
+                ? 'Select customer first'
+                : isLoadingItems
+                  ? 'Loading items...'
+                  : (!isItemFocus ? 'Select Item' : '...')
+            }
             searchPlaceholder="Search item..."
-            onFocus={() => setIsItemFocus(true)}
+            onFocus={() => !isLoadingItems && form.customerId && setIsItemFocus(true)}
             onBlur={() => setIsItemFocus(false)}
-            onChange={(item) => {
+            disable={!form.customerId || isLoadingItems}
+            onChange={(selectedItem) => {
+              const itemData = items.find(item => item._id === selectedItem._id);
               setForm((prev) => ({
                 ...prev,
-                itemId: item._id,
+                itemId: selectedItem._id,
+                defaultQuantityType: itemData?.itemId?.defaultQuantityType || '',
+                quantity: "",
+                boxes: ""
               }));
               setIsItemFocus(false);
             }}
@@ -284,26 +356,79 @@ export default function Index() {
                 </Text>
               </View>
             )}
-            selectedTextProps={(item) => (
-              <Text style={styles.selectedTextStyle}>
-                {item.itemId.name} - ₹{item.price}
-              </Text>
-            )}
           />
-          <Text className="text-gray-700 font-semibold">Quantity</Text>
-          <TextInput className={inputClass} value={form.quantity} keyboardType="numeric" onChangeText={(val) => handleChange('quantity', val)} />
+
+          {/* Empty state for items */}
+          {form.customerId && !isLoadingItems && items.length === 0 && (
+            <View className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 mt-2">
+              <Text className="text-yellow-800 text-center">
+                No items found for this customer
+              </Text>
+            </View>
+          )}
+
+          {/* Conditional rendering for Box vs Loose items */}
+          {form.itemId ? (
+            form.defaultQuantityType === 'box' ? (
+              <>
+                <Text className="text-gray-700 font-semibold">Boxes</Text>
+                <TextInput
+                  className={inputClass}
+                  value={form.boxes}
+                  keyboardType="numeric"
+                  onChangeText={(val) => {
+                    const newBoxes = Number(val) || 0;
+                    const itemsPerBox = items.find((item) => item._id === form.itemId)?.itemId?.itemsPerBox || 0;
+                    const newQuantity = newBoxes * itemsPerBox;
+                    
+                    setForm(prev => ({
+                      ...prev,
+                      boxes: val,
+                      quantity: newQuantity.toString()
+                    }));
+                  }}
+                  placeholder="Enter number of boxes"
+                />
+                <Text className="text-gray-500 text-sm mt-1">
+                  A Box Contains {items.find((item) => item._id === form.itemId)?.itemId?.itemsPerBox ?? 0} Items
+                </Text>
+                
+                <Text className="text-gray-700 font-semibold">Quantity</Text>
+                <TextInput
+                  className={inputClass}
+                  value={form.quantity}
+                  keyboardType="numeric"
+                  onChangeText={(val) => handleChange('quantity', val)}
+                  editable={!isLoadingItems && !!form.itemId}
+                  placeholder="Calculated quantity"
+                />
+              </>
+            ) : (
+              <>
+                <Text className="text-gray-600 mb-2">Loose Items</Text>
+                <Text className="text-gray-700 font-semibold">Quantity</Text>
+                <TextInput
+                  className={inputClass}
+                  value={form.quantity}
+                  keyboardType="numeric"
+                  onChangeText={(val) => handleChange('quantity', val)}
+                  editable={!isLoadingItems && !!form.itemId}
+                  placeholder="Enter quantity"
+                />
+              </>
+            )
+          ) : null}
 
           <TouchableOpacity
             onPress={addItemToCart}
-            className={`${!form.itemId||!form.quantity ? `bg-gray-400` : `bg-blue-600`} rounded-xl px-6 py-3 mt-2`}
-            disabled={!form.itemId||!form.quantity}
+            className={`${!form.itemId || !form.quantity || isLoadingItems ? `bg-gray-400` : `bg-blue-600`} rounded-xl px-6 py-3 mt-2`}
+            disabled={!form.itemId || !form.quantity || isLoadingItems}
           >
             <Text className="text-white text-center font-bold">Add Item</Text>
           </TouchableOpacity>
         </View>
       );
     }
-
 
     if (step === 2) {
       const total = cart.reduce((acc, cur) => acc + parseInt(cur.amount || 0), 0);
@@ -321,13 +446,29 @@ export default function Index() {
           <TextInput className="bg-gray-200 px-4 py-3 rounded-xl" value={String(finalBill)} editable={false} />
 
           <Text className="text-gray-700 font-semibold">Online Payment</Text>
-          <TextInput className={inputClass} keyboardType="numeric" value={form.onlinePayment} onChangeText={(val) => handleChange('onlinePayment', val)} />
+          <TextInput
+            className={inputClass}
+            keyboardType="numeric"
+            value={form.onlinePayment}
+            onChangeText={(val) => handleChange('onlinePayment', val)}
+            editable={!isSubmitting}
+          />
 
           <Text className="text-gray-700 font-semibold">Cash Payment</Text>
-          <TextInput className={inputClass} keyboardType="numeric" value={form.cashPayment} onChangeText={(val) => handleChange('cashPayment', val)} />
+          <TextInput
+            className={inputClass}
+            keyboardType="numeric"
+            value={form.cashPayment}
+            onChangeText={(val) => handleChange('cashPayment', val)}
+            editable={!isSubmitting}
+          />
 
           <Text className="text-gray-700 font-semibold">Total Payment</Text>
-          <TextInput className="bg-gray-200 px-4 py-3 rounded-xl" value={(parseFloat(form.onlinePayment || 0) + parseFloat(form.cashPayment || 0)).toString() || '0'} editable={false} />
+          <TextInput
+            className="bg-gray-200 px-4 py-3 rounded-xl"
+            value={(parseFloat(form.onlinePayment || 0) + parseFloat(form.cashPayment || 0)).toString() || '0'}
+            editable={false}
+          />
         </View>
       );
     }
@@ -343,9 +484,11 @@ export default function Index() {
           <View className="w-full h-2 bg-white/30 rounded-full">
             <View className="h-2 bg-white rounded-full" style={{ width: `${(step / totalSteps) * 100}%` }} />
           </View>
+
           <TouchableOpacity className='absolute left-2 top-10' onPress={() => { router.push("/Home/Profile") }}>
             <Ionicons name='person-circle' size={40} color="white" />
           </TouchableOpacity>
+
           {cart.length > 0 && (
             <TouchableOpacity
               onPress={() => setShowCart(true)}
@@ -357,7 +500,6 @@ export default function Index() {
           )}
 
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
-
             <Animated.View
               key={step}
               className="flex-1 px-6 py-6"
@@ -372,20 +514,35 @@ export default function Index() {
 
           <View className="flex-row justify-between items-center px-6 pb-6">
             {step > 1 ? (
-              <TouchableOpacity onPress={() => handleStepChange(step - 1)} className="flex-row items-center bg-white border border-blue-300 px-6 py-3 rounded-full shadow">
+              <TouchableOpacity
+                onPress={() => handleStepChange(step - 1)}
+                className="flex-row items-center bg-white border border-blue-300 px-6 py-3 rounded-full shadow"
+                disabled={isSubmitting}
+              >
                 <Ionicons name="chevron-back" size={20} color="#2563eb" />
                 <Text className="text-blue-600 font-semibold ml-1">Previous</Text>
               </TouchableOpacity>
             ) : <View />}
 
             {step < totalSteps ? (
-              <TouchableOpacity onPress={() => handleStepChange(step + 1)} className={`flex-row items-center ${isStepValid() ? 'bg-blue-600' : 'bg-gray-400'} px-6 py-3 rounded-full shadow`} disabled={!isStepValid()}>
+              <TouchableOpacity
+                onPress={() => handleStepChange(step + 1)}
+                className={`flex-row items-center ${isStepValid() && !isLoadingCustomers && !isLoadingItems ? 'bg-blue-600' : 'bg-gray-400'} px-6 py-3 rounded-full shadow`}
+                disabled={!isStepValid() || isLoadingCustomers || isLoadingItems}
+              >
                 <Text className="text-white font-semibold mr-1">Next</Text>
                 <Ionicons name="chevron-forward" size={20} color="white" />
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity onPress={handleSubmit} disabled={!isStepValid()} className={`${isStepValid() ? 'bg-green-600' : 'bg-gray-400'} px-6 py-3 rounded-full shadow`}>
-                <Text className="text-white font-semibold">Submit</Text>
+              <TouchableOpacity
+                onPress={handleSubmit}
+                disabled={!isStepValid() || isSubmitting}
+                className={`flex-row items-center ${isStepValid() && !isSubmitting ? 'bg-green-600' : 'bg-gray-400'} px-6 py-3 rounded-full shadow`}
+              >
+                {isSubmitting && <ActivityIndicator size="small" color="white" style={{ marginRight: 8 }} />}
+                <Text className="text-white font-semibold">
+                  {isSubmitting ? 'Submitting...' : 'Submit'}
+                </Text>
               </TouchableOpacity>
             )}
           </View>
@@ -433,6 +590,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 12,
     backgroundColor: 'white',
+  },
+  dropdownLoading: {
+    opacity: 0.6,
+    backgroundColor: '#f9f9f9',
   },
   icon: {
     marginRight: 5,
