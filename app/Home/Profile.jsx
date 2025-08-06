@@ -10,7 +10,7 @@ export default function Profile() {
     }
 
     return (
-        <View className="items-center justify-center align-middle h-full">
+        <View className="items-center justify-center align-middle h-full bg-[#07363C]">
             <TouchableOpacity onPress={handleLogout} className="bg-indigo-600 py-3 mt-10 rounded-xl w-[50%] self-center">
                 <Text className="text-center text-white text-base font-semibold">
                     Logout
