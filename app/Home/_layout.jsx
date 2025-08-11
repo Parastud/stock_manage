@@ -28,6 +28,12 @@ export default function HomeLayout() {
                     tabBarIcon: ({ color }) => <FontAwesome name="money" size={24} color={color} />
                 }}
             />
+                <Tabs.Screen
+                    name="Expenses"
+                    options={{
+                        tabBarIcon: ({ color }) => <FontAwesome name="credit-card" size={24} color={color} />
+                    }}
+                />
             <Tabs.Screen
                 name="Profile"
                 options={{

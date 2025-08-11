@@ -223,10 +223,10 @@ import axiosInstance from '../../src/Components/utils/axios';
 
       try {
         const [res1, res2] = await Promise.all([
-          axiosInstance.get("/customers?view=true", {
+          axiosInstance.get("/customers?view=true&resultsPerPage=1000", {
             headers: { Authorization: token }
           }),
-          axiosInstance.get("/customerItemMappings?view=true", {
+          axiosInstance.get("/customerItemMappings?view=true&resultsPerPage=1000", {
             headers: { Authorization: token }
           })
         ]);

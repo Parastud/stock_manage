@@ -86,7 +86,7 @@ export default function Payment() {
         }
 
         try {
-            const res = await axiosInstance.get("/customers?view=true", {
+            const res = await axiosInstance.get("/customers?view=true&resultsPerPage=1000", {
                 headers: { Authorization: token }
             });
             setCustomers(Array.isArray(res.data) ? res.data : res.data.data || []);
