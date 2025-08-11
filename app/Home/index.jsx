@@ -231,8 +231,8 @@ import axiosInstance from '../../src/Components/utils/axios';
           })
         ]);
 
-        setCustomers(Array.isArray(res1.data) ? res1.data : res1.data.data || []);
-        setCustomerMapping(res2.data.data.items);
+        setCustomers(res1?.data?.data?.items);
+        setCustomerMapping(res2?.data?.data?.items);
 
 
 
