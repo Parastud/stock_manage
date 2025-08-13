@@ -164,7 +164,6 @@ export default function Receipt() {
             <div class="item-row">
               <span>${item.itemName || 'Unnamed Item'}</span>
               <span>Qty: ${item.quantity}</span>
-              <span>₹${item.amount}</span>
             </div>
           `).join('')}
         </div>
@@ -206,7 +205,7 @@ Total Payment: ₹${receiptData.totalPayment}`;
     if (receiptData.showItems && receiptData.items.length > 0) {
       message += `
 Items: ${receiptData.items
-          .map(i => `${i.itemName || 'Unnamed'} x${i.quantity} - ₹${i.amount}`)
+          .map(i => `${i.itemName || 'Unnamed'} x${i.quantity}`)
           .join(', ')}`;
     }
 
@@ -284,7 +283,6 @@ Items: ${receiptData.items
                   <View key={idx} className="flex-row justify-between border-b py-2">
                     <Text className="text-gray-800">{item.itemName || 'Unnamed Item'}</Text>
                     <Text className="text-gray-500">x{item.quantity}</Text>
-                    <Text className="font-semibold text-gray-700">₹{item.amount}</Text>
                   </View>
                 ))
               ) : (
