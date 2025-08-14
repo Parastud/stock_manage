@@ -135,7 +135,7 @@ export default function Receipt() {
 
         <div class="section">
           <div class="section-title">Customer</div>
-          <div class="section-value">${receiptData.customer}</div>
+          <div class="section-value blue">${receiptData.customer}</div>
         </div>
 
         ${receiptData.totalAmount !== null ? `
@@ -239,7 +239,7 @@ Items: ${receiptData.items
             </View>
             <View className="flex-row justify-between">
               <Text className="text-gray-500">Customer:</Text>
-              <Text className="font-medium">{receiptData.customer}</Text>
+              <Text className="font-medium text-sky-600">{receiptData.customer}</Text>
             </View>
           </View>
 
