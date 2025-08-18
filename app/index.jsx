@@ -1,15 +1,16 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { useEffect } from "react";
+import { useHealth } from "../src/Components/Providers/Health";
 
 export default function Index() {
   const router = useRouter();
+  const {isConnected} = useHealth()
 
   useEffect(() => {
     const checkLoginStatus = async () => {
       const userToken = await AsyncStorage.getItem('userToken');
       const loginTimestamp = await AsyncStorage.getItem('loginTimestamp');
-
       if (!userToken || !loginTimestamp) {
         router.replace('/Login');
         return;
