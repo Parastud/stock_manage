@@ -34,6 +34,13 @@ export default function HomeLayout() {
                         tabBarIcon: ({ color }) => <FontAwesome name="credit-card" size={24} color={color} />
                     }}
                 />
+                <Tabs.Screen
+                    name="History"
+                    options={{
+                        title:"Order History",
+                        tabBarIcon: ({ color }) => <FontAwesome name="history" size={24} color={color} />
+                    }}
+                />
             <Tabs.Screen
                 name="Profile"
                 options={{
@@ -41,8 +48,7 @@ export default function HomeLayout() {
                     tabBarIcon: ({ color }) => <FontAwesome name="user" size={24} color={color} />
                 }}
             />
-            <Tabs.Screen name="Reciept" options={{ href: null,tabBarStyle: { display: 'none' }
- }} />
+            <Tabs.Screen name="Reciept" options={{ href: null,tabBarStyle: { display: 'none' }}} />
         </Tabs>
     )
 }

@@ -379,6 +379,7 @@ import axiosInstance from '../../src/Components/utils/axios';
                   quantity: '',
                   itemId: ''
                 }));
+                setCart([])
                 setPending(item.totalPendingAmount);
                 setIsCustomerFocus(false);
                 setIsLoadingItems(true);

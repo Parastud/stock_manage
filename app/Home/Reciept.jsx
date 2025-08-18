@@ -122,11 +122,11 @@ export default function Receipt() {
       <div class="container">
         <h1>🧾 ${receiptData.title}</h1>
 
-        <div class="section">
-        ${!isFromPayment &&
-    <div class="section-title">'Order ID'</div>}
+        ${isFromOrder ?
+        `<div class="section">
+    <div class="section-title">Order ID</div>
           <div class="section-value">${receiptData.orderId}</div>
-        </div>
+        </div>`:``}
 
         <div class="section">
           <div class="section-title">Date</div>
