@@ -1,16 +1,14 @@
 import { FontAwesome } from "@expo/vector-icons"
-import AsyncStorage from "@react-native-async-storage/async-storage"
 import { Tabs } from "expo-router"
 import { useEffect } from "react"
+import { SafeAreaView } from "react-native-safe-area-context"
 import NoInternetWrapper from "../../src/Components/NoInternetBanner"
 import { useHealth } from "../../src/Providers/Health"
+import oldsync from "../../src/utils/oldsync"
 
 export default function HomeLayout() {
     const { isConnected } = useHealth()
-    const oldsync = async () => {
-        const orders = await AsyncStorage.getItem('missedorders')
-        console.log(JSON.parse(orders))
-    }
+
     useEffect(() => {
         if (isConnected) {
             oldsync()
@@ -19,7 +17,7 @@ export default function HomeLayout() {
     }, [])
 
     return (
-
+        <SafeAreaView style={{flex:1, backgroundColor:"#07363C"}}>
         <NoInternetWrapper>
             <Tabs
                 screenOptions={{
@@ -69,5 +67,6 @@ export default function HomeLayout() {
                 <Tabs.Screen name="Reciept" options={{ href: null, tabBarStyle: { display: 'none' } }} />
             </Tabs>
         </NoInternetWrapper>
+        </SafeAreaView>
     )
 }

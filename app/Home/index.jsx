@@ -49,7 +49,7 @@ export default function Index() {
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
   const [isLoadingItems, setIsLoadingItems] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { isConnected } = useHealth()
+  const { isConnected, checkConnection } = useHealth()
 
   const [form, setForm] = useState({
     customerId: '',
@@ -127,13 +127,26 @@ export default function Index() {
     };
 
     try {
-      if (isConnected) {
+      if (await checkConnection()) {
         const res = await axiosInstance.post('/order', payload, {
           headers: { Authorization: token },
         });
         Toast.show({
           type: 'success',
           text1: 'Order Added Successfully',
+        });
+        const responseData = res.data.data;
+        router.push({
+          pathname: "/Home/Reciept",
+          params: {
+            ...responseData,
+            source: 'order',
+            cart: JSON.stringify(cart),
+            payment: JSON.stringify({ cash: cashAmount, online: onlineAmount }),
+            oldpending: pending || 0,
+            customername: customers.find(i => form.customerId == i._id)?.name || 'N/A',
+            totalAmount: cart.reduce((sum, item) => sum + item.amount, 0)
+          }
         });
       } else {
         const oldData = await AsyncStorage.getItem("missedorders");
@@ -143,25 +156,20 @@ export default function Index() {
         }
         data.push(payload);
         await AsyncStorage.setItem("missedorders", JSON.stringify(data));
-        Toast.show({
-          type: 'error',
-          text1: 'Order is Saved...',
+                router.push({
+          pathname: "/Home/Reciept",
+          params: {
+            source: 'order',
+             _id: 'Offline Mode',
+            cart: JSON.stringify(cart),
+            payment: JSON.stringify({ cash: cashAmount, online: onlineAmount }),
+            oldpending: pending || 0,
+            customername: customers.find(i => form.customerId == i._id)?.name || 'N/A',
+            totalAmount: cart.reduce((sum, item) => sum + item.amount, 0)
+          }
         });
 
       }
-      resetForm();
-      fetchData();
-      const responseData = res.data.data;
-      router.push({
-        pathname: "/Home/Reciept",
-        params: {
-          ...responseData,
-          cart: JSON.stringify(cart),
-          items: JSON.stringify(responseData.items),
-          payment: JSON.stringify(responseData.payment),
-          customername: customers.find(i => form.customerId == i._id)?.name
-        }
-      });
     } catch (error) {
       const errMsg =
         error?.response?.data?.errors?.[0]?.message ||
@@ -174,6 +182,8 @@ export default function Index() {
       });
     } finally {
       setIsSubmitting(false);
+      resetForm();
+      fetchData();
     }
   };
 

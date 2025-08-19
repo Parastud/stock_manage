@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
 import { createContext, useContext, useEffect, useState } from "react";
 import axiosInstance from "../utils/axios";
+import oldsync from "../utils/oldsync";
 
 const HealthContext = createContext();
 
@@ -13,11 +14,10 @@ export const HealthProvider = ({ children }) => {
 
   const checkConnection = async () => {
     try {
-      // Check internet first
       const netInfo = await NetInfo.fetch();
       if (!netInfo.isConnected) {
         setIsConnected(false);
-        return;
+        return false
       }
 
       // If internet exists, check server
@@ -27,19 +27,22 @@ export const HealthProvider = ({ children }) => {
       });
 
       setIsConnected(res.status === 200);
+      oldsync()
+      return true
     } catch (error) {
       setIsConnected(false);
+      return false
     }
   };
 
   useEffect(() => {
     checkConnection();
-    const interval = setInterval(checkConnection, 300);
+    const interval = setInterval(checkConnection, 60000);
     return () => clearInterval(interval);
   }, []);
 
   return (
-    <HealthContext.Provider value={{ isConnected }}>
+    <HealthContext.Provider value={{ isConnected,checkConnection }}>
       {children}
     </HealthContext.Provider>
   );

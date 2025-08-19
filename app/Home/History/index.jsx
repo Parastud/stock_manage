@@ -175,7 +175,7 @@ export default function History() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#07363C' }}>
+    <>
       <LinearGradient colors={['#13545c', '#07363C']} style={{ flex: 1 }}>
         <FlatList
           data={orders}
@@ -196,7 +196,7 @@ export default function History() {
         />
       </LinearGradient>
       <Toast />
-    </SafeAreaView>
+      </>
   );
 }
 

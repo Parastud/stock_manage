@@ -33,7 +33,7 @@ const NoInternetWrapper = ({children }) => {
 
 const styles = StyleSheet.create({
   banner: {
-    height: 60,
+    height: 30,
     backgroundColor: "#e74c3c",
     justifyContent: "center",
     alignItems: "center",
