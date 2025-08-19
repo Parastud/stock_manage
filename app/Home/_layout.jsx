@@ -1,33 +1,51 @@
 import { FontAwesome } from "@expo/vector-icons"
+import AsyncStorage from "@react-native-async-storage/async-storage"
 import { Tabs } from "expo-router"
+import { useEffect } from "react"
+import NoInternetWrapper from "../../src/Components/NoInternetBanner"
+import { useHealth } from "../../src/Providers/Health"
 
 export default function HomeLayout() {
+    const { isConnected } = useHealth()
+    const oldsync = async () => {
+        const orders = await AsyncStorage.getItem('missedorders')
+        console.log(JSON.parse(orders))
+    }
+    useEffect(() => {
+        if (isConnected) {
+            oldsync()
+        }
+
+    }, [])
+
     return (
-        <Tabs
-            screenOptions={{
-                headerShown: false,
-                tabBarActiveTintColor: 'white',
-                tabBarInactiveTintColor: 'gray',
-                tabBarStyle: {
-                    backgroundColor: '#07363C',
-                    height: 60,
-                }
-            }}
-        >
-            <Tabs.Screen
-                name="index"
-                options={{
-                    title: "Home",
-                    tabBarIcon: ({ color }) => <FontAwesome name="home" size={24} color={color} />
+
+        <NoInternetWrapper>
+            <Tabs
+                screenOptions={{
+                    headerShown: false,
+                    tabBarActiveTintColor: 'white',
+                    tabBarInactiveTintColor: 'gray',
+                    tabBarStyle: {
+                        backgroundColor: '#07363C',
+                        height: 60,
+                    }
                 }}
-            />
-            <Tabs.Screen
-                name="Payment"
-                options={{
-                    title: "Payment",
-                    tabBarIcon: ({ color }) => <FontAwesome name="money" size={24} color={color} />
-                }}
-            />
+            >
+                <Tabs.Screen
+                    name="index"
+                    options={{
+                        title: "Home",
+                        tabBarIcon: ({ color }) => <FontAwesome name="home" size={24} color={color} />
+                    }}
+                />
+                <Tabs.Screen
+                    name="Payment"
+                    options={{
+                        title: "Payment",
+                        tabBarIcon: ({ color }) => <FontAwesome name="money" size={24} color={color} />
+                    }}
+                />
                 <Tabs.Screen
                     name="Expenses"
                     options={{
@@ -37,18 +55,19 @@ export default function HomeLayout() {
                 <Tabs.Screen
                     name="History"
                     options={{
-                        title:"Order History",
+                        title: "Order History",
                         tabBarIcon: ({ color }) => <FontAwesome name="history" size={24} color={color} />
                     }}
                 />
-            <Tabs.Screen
-                name="Profile"
-                options={{
-                    title: "Profile",
-                    tabBarIcon: ({ color }) => <FontAwesome name="user" size={24} color={color} />
-                }}
-            />
-            <Tabs.Screen name="Reciept" options={{ href: null,tabBarStyle: { display: 'none' }}} />
-        </Tabs>
+                <Tabs.Screen
+                    name="Profile"
+                    options={{
+                        title: "Profile",
+                        tabBarIcon: ({ color }) => <FontAwesome name="user" size={24} color={color} />
+                    }}
+                />
+                <Tabs.Screen name="Reciept" options={{ href: null, tabBarStyle: { display: 'none' } }} />
+            </Tabs>
+        </NoInternetWrapper>
     )
 }

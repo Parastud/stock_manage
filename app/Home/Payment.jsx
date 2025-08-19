@@ -20,7 +20,7 @@ import {
 } from 'react-native';
 import { Dropdown } from 'react-native-element-dropdown';
 import Toast from 'react-native-toast-message';
-import axiosInstance from '../../src/Components/utils/axios';
+import axiosInstance from '../../src/utils/axios';
 
 export default function Payment() {
     const [customers, setCustomers] = useState([]);

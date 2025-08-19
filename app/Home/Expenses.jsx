@@ -19,7 +19,7 @@ import {
 import { Dropdown } from 'react-native-element-dropdown';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import Toast from 'react-native-toast-message';
-import axiosInstance from '../../src/Components/utils/axios';
+import axiosInstance from '../../src/utils/axios';
 
 export default function Expense() {
     const [isPaymentTypeFocus, setIsPaymentTypeFocus] = useState(false);

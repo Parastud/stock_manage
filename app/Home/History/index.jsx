@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
-import axiosInstance from '../../../src/Components/utils/axios';
+import axiosInstance from '../../../src/utils/axios';
 
 export default function History() {
   const [orders, setOrders] = useState([]);

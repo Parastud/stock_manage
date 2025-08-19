@@ -13,7 +13,7 @@ import {
   View,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import axiosInstance from '../../src/Components/utils/axios';
+import axiosInstance from '../../src/utils/axios';
 
 export default function App() {
   const [showPassword, setShowPassword] = useState(false);

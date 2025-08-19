@@ -34,7 +34,7 @@ export const HealthProvider = ({ children }) => {
 
   useEffect(() => {
     checkConnection();
-    const interval = setInterval(checkConnection, 10000);
+    const interval = setInterval(checkConnection, 300);
     return () => clearInterval(interval);
   }, []);
 
