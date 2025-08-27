@@ -8,9 +8,9 @@ import {
   FlatList,
   Keyboard,
   Modal,
+  Platform,
   RefreshControl,
   SafeAreaView,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -18,7 +18,7 @@ import {
   TouchableWithoutFeedback,
   View
 } from 'react-native';
-import { Dropdown } from 'react-native-element-dropdown';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import Animated, {
   SlideInLeft,
   SlideInRight,
@@ -26,18 +26,23 @@ import Animated, {
   SlideOutRight,
 } from 'react-native-reanimated';
 import Toast from 'react-native-toast-message';
+import CustomDropdown from '../../src/Components/CustomDropdown';
 import { useHealth } from '../../src/Providers/Health';
 import axiosInstance from '../../src/utils/axios';
 
 const totalSteps = 2;
+
+// Utility function to get nested object values
+const getNestedValue = (obj, path) => {
+  if (!obj || !path) return null;
+  return path.split('.').reduce((current, key) => current?.[key], obj);
+};
 
 export default function Index() {
   const [step, setStep] = useState(1);
   const [direction, setDirection] = useState('next');
   const [customers, setCustomers] = useState([]);
   const [items, setItems] = useState([]);
-  const [isCustomerFocus, setIsCustomerFocus] = useState(false);
-  const [isItemFocus, setIsItemFocus] = useState(false);
   const [pending, setPending] = useState();
   const [cart, setCart] = useState([]);
   const [showCart, setShowCart] = useState(false);
@@ -49,7 +54,7 @@ export default function Index() {
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
   const [isLoadingItems, setIsLoadingItems] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { isConnected, checkConnection } = useHealth()
+  const { isConnected, checkConnection } = useHealth();
 
   const [form, setForm] = useState({
     customerId: '',
@@ -102,15 +107,6 @@ export default function Index() {
       return;
     }
 
-    if (!form.customerId || cart.length === 0) {
-      Toast.show({
-        type: "error",
-        text1: 'Missing customer or cart information',
-      });
-      setIsSubmitting(false);
-      return;
-    }
-
     const payload = {
       customerId: form.customerId,
       items: cart.map(({ itemId, quantity, amount }) => ({
@@ -156,11 +152,11 @@ export default function Index() {
         }
         data.push(payload);
         await AsyncStorage.setItem("missedorders", JSON.stringify(data));
-                router.push({
+        router.push({
           pathname: "/Home/Reciept",
           params: {
             source: 'order',
-             _id: 'Offline Mode',
+            _id: 'Offline Mode',
             cart: JSON.stringify(cart),
             payment: JSON.stringify({ cash: cashAmount, online: onlineAmount }),
             oldpending: pending || 0,
@@ -168,7 +164,6 @@ export default function Index() {
             totalAmount: cart.reduce((sum, item) => sum + item.amount, 0)
           }
         });
-
       }
     } catch (error) {
       const errMsg =
@@ -237,13 +232,12 @@ export default function Index() {
   };
 
   const fetchData = async (isRefreshing = false) => {
-    handleChange('customerId', '')
-    handleChange('itemId', '')
-    setStep(1)
-    setCart([])
+    handleChange('customerId', '');
+    handleChange('itemId', '');
+    setStep(1);
+    setCart([]);
     const token = await AsyncStorage.getItem('userToken');
 
-    // Don't show loading indicator if it's a refresh
     if (!isRefreshing) {
       setIsLoadingCustomers(true);
     }
@@ -257,18 +251,20 @@ export default function Index() {
           headers: { Authorization: token }
         })
       ]);
-      await AsyncStorage.setItem('savedcustomers', JSON.stringify(res1?.data?.data?.items))
-      await AsyncStorage.setItem('savedmappings', JSON.stringify(res2?.data?.data?.items))
+      
+      await AsyncStorage.setItem('savedcustomers', JSON.stringify(res1?.data?.data?.items));
+      await AsyncStorage.setItem('savedmappings', JSON.stringify(res2?.data?.data?.items));
       setCustomers(res1?.data?.data?.items);
       setCustomerMapping(res2?.data?.data?.items);
-
-
-
     } catch (error) {
-      const savedcustomers = await AsyncStorage.getItem('savedcustomers')
-      const savedmappings = await AsyncStorage.getItem('savedmappings')
-      setCustomers(JSON.parse(savedcustomers));
-      setCustomerMapping(JSON.parse(savedmappings));
+      const savedcustomers = await AsyncStorage.getItem('savedcustomers');
+      const savedmappings = await AsyncStorage.getItem('savedmappings');
+      if(savedcustomers){
+        setCustomers(JSON.parse(savedcustomers));
+      }
+      if(savedmappings){
+        setCustomerMapping(JSON.parse(savedmappings));
+      }
       Toast.show({
         type: "error",
         text1: "Using Pre saved Data"
@@ -280,21 +276,16 @@ export default function Index() {
     }
   };
 
-  // Improved refresh handler
   const onRefresh = async () => {
-    // Dismiss keyboard first
     Keyboard.dismiss();
-
     setRefreshing(true);
 
     try {
-      // Add a minimum delay to ensure the spinner is visible
       const [dataResult] = await Promise.all([
         fetchData(true),
-        new Promise(resolve => setTimeout(resolve, 500)) // Minimum 500ms delay
+        new Promise(resolve => setTimeout(resolve, 500))
       ]);
     } catch (error) {
-      console.log('Refresh error:', error);
     } finally {
       setRefreshing(false);
     }
@@ -333,10 +324,13 @@ export default function Index() {
 
     const item = items.find((i) => i._id === form.itemId);
     const singleitem = item.price / item.quantity;
-    const amount = item?.itemId.shouldRoundOff ? roundUpTo50(Number(form.quantity * singleitem)) : (Number(form.quantity * singleitem))
+    const amount = getNestedValue(item, 'itemId.shouldRoundOff') 
+      ? roundUpTo50(Number(form.quantity * singleitem)) 
+      : (Number(form.quantity * singleitem));
+    
     const newItem = {
       itemId: item.itemId,
-      itemName: item?.itemId.name || '',
+      itemName: getNestedValue(item, 'itemId.name') || '',
       quantity: Math.floor(Number(form.quantity)),
       amount: amount,
       _id: item._id
@@ -365,7 +359,7 @@ export default function Index() {
 
   const isStepValid = () => {
     if (step === 1) {
-      return form.customerId.trim() !== '' && cart.length > 0;
+      return form.customerId.trim() !== '';
     }
     if (step === 2) {
       const cashAmount = parseFloat(form.cashPayment) || 0;
@@ -375,76 +369,77 @@ export default function Index() {
     return false;
   };
 
+  // Fixed customer selection handler
+  const handleCustomerSelect = (selectedCustomer) => {
+    
+    setForm((prev) => ({
+      ...prev,
+      customerId: selectedCustomer._id,
+      defaultQuantityType: '',
+      boxes: '',
+      quantity: '',
+      itemId: ''
+    }));
+    
+    setCart([]);
+    setPending(selectedCustomer.totalPendingAmount);
+    setIsLoadingItems(true);
+
+    // Filter mappings for the selected customer - this is working correctly!
+    const customerMappings = CustomerMapping.filter((mapping) => {
+      const mappingCustomerId = getNestedValue(mapping, 'customerId._id') || mapping.customerId;
+      return mappingCustomerId === selectedCustomer._id;
+    });
+    
+    setTimeout(() => {
+      setItems(customerMappings);
+      setIsLoadingItems(false);
+    }, 300);
+  };
+
   const renderStep = () => {
     if (step === 1) {
       return (
         <View className="space-y-4">
           <Text className="text-gray-700 font-semibold">Select Customer</Text>
 
-          <Dropdown
-            style={[
-              styles.dropdown,
-              isCustomerFocus && { borderColor: '#2563eb', borderWidth: 2 },
-              isLoadingCustomers && styles.dropdownLoading
-            ]}
-            placeholderStyle={styles.placeholderStyle}
-            selectedTextStyle={styles.selectedTextStyle}
-            inputSearchStyle={styles.inputSearchStyle}
-            iconStyle={styles.iconStyle}
-            data={isLoadingCustomers ? [] : customers}
-            search
-            maxHeight={300}
+          <CustomDropdown
+            data={customers}
             labelField="name"
             valueField="_id"
-            placeholder={isLoadingCustomers ? 'Loading customers...' : (!isCustomerFocus ? 'Select Customer' : '')}
+            placeholder="Select Customer"
             searchPlaceholder="Search customer..."
             value={form.customerId}
-            onFocus={() => !isLoadingCustomers && setIsCustomerFocus(true)}
-            onBlur={() => setIsCustomerFocus(false)}
-            disable={isLoadingCustomers}
-            onChange={(item) => {
-              setForm((prev) => ({
-                ...prev,
-                customerId: item._id,
-                defaultQuantityType: '',
-                boxes: '',
-                quantity: '',
-                itemId: ''
-              }));
-              setCart([])
-              setPending(item.totalPendingAmount);
-              setIsCustomerFocus(false);
-              setIsLoadingItems(true);
-
-              setTimeout(() => {
-                setItems(
-                  CustomerMapping.filter((x) => x.customerId?._id === item._id)
-                );
-                setIsLoadingItems(false);
-              }, 300);
+            disabled={isLoadingCustomers}
+            loading={isLoadingCustomers}
+            onSelect={handleCustomerSelect}
+            noDataText="No customers found"
+            style={{
+              borderColor: '#d1d5db',
+              borderWidth: 1,
+              borderRadius: 12,
+              backgroundColor: '#ffffff'
             }}
             renderItem={(item) => (
-              <View style={{ padding: 10 }}>
-                <Text>{item.name}</Text>
+              <View style={{ padding: 15, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
+                <Text style={{ fontSize: 16, fontWeight: '500' }}>{item.name}</Text>
+                {item.totalPendingAmount !== 0 && (
+                  <Text style={{ 
+                    fontSize: 12, 
+                    color: item.totalPendingAmount > 0 ? '#ef4444' : '#059669', 
+                    marginTop: 2 
+                  }}>
+                    {item.totalPendingAmount > 0 ? 'Pending' : 'Credit'}: ₹{Math.abs(item.totalPendingAmount).toFixed(2)}
+                  </Text>
+                )}
               </View>
             )}
           />
 
-          <Text className="text-gray-700 font-semibold">Select Mapping</Text>
+          <Text className="text-gray-700 font-semibold">Select Item</Text>
 
-          <Dropdown
-            style={[
-              styles.dropdown,
-              isItemFocus && { borderColor: '#2563eb', borderWidth: 2 },
-              (!form.customerId || isLoadingItems) && styles.dropdownLoading
-            ]}
-            placeholderStyle={styles.placeholderStyle}
-            selectedTextStyle={styles.selectedTextStyle}
-            inputSearchStyle={styles.inputSearchStyle}
-            iconStyle={styles.iconStyle}
-            data={isLoadingItems ? [] : items}
-            search
-            maxHeight={300}
+          <CustomDropdown
+            data={items}
             labelField="itemId.name"
             valueField="_id"
             placeholder={
@@ -452,29 +447,48 @@ export default function Index() {
                 ? 'Select customer first'
                 : isLoadingItems
                   ? 'Loading items...'
-                  : (!isItemFocus ? 'Select Item' : '...')
+                  : 'Select Item'
             }
-            searchPlaceholder="Search item..."
-            onFocus={() => !isLoadingItems && form.customerId && setIsItemFocus(true)}
-            onBlur={() => setIsItemFocus(false)}
-            disable={!form.customerId || isLoadingItems}
-            onChange={(selectedItem) => {
-              const itemData = items.find(item => item._id === selectedItem._id);
+            searchPlaceholder="Search items..."
+            value={form.itemId}
+            disabled={!form.customerId || isLoadingItems}
+            loading={isLoadingItems}
+            onSelect={(selectedItem) => {
               setForm((prev) => ({
                 ...prev,
                 itemId: selectedItem._id,
-                defaultQuantityType: itemData?.itemId?.defaultQuantityType || '',
+                defaultQuantityType: getNestedValue(selectedItem, 'itemId.defaultQuantityType') || '',
                 quantity: "",
                 boxes: ""
               }));
-              setIsItemFocus(false);
             }}
-            value={form.itemId}
+            noDataText="No items available for this customer"
+            style={{
+              borderColor: (!form.customerId || isLoadingItems) ? '#e5e7eb' : '#d1d5db',
+              borderWidth: 1,
+              borderRadius: 12,
+              backgroundColor: (!form.customerId || isLoadingItems) ? '#f9fafb' : '#ffffff'
+            }}
             renderItem={(item) => (
-              <View style={{ padding: 10 }}>
-                <Text>
-                  Item: {item.itemId.name} | Quantity: {item.quantity} | Price: ₹{item.price}
+              <View style={{ padding: 15, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
+                <Text style={{ fontSize: 16, fontWeight: '500' }}>
+                  {getNestedValue(item, 'itemId.name')}
                 </Text>
+                <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
+                  Qty: {item.quantity} | Price: ₹{item.price}
+                </Text>
+                <View style={{ flexDirection: 'row', marginTop: 2 }}>
+                  {getNestedValue(item, 'itemId.defaultQuantityType') && (
+                    <Text style={{ fontSize: 12, color: '#3b82f6', marginRight: 15 }}>
+                      Type: {getNestedValue(item, 'itemId.defaultQuantityType')}
+                    </Text>
+                  )}
+                  {getNestedValue(item, 'itemId.itemsPerBox') && (
+                    <Text style={{ fontSize: 12, color: '#8b5cf6' }}>
+                      Items/Box: {getNestedValue(item, 'itemId.itemsPerBox')}
+                    </Text>
+                  )}
+                </View>
               </View>
             )}
           />
@@ -498,7 +512,8 @@ export default function Index() {
                   onChangeText={(val) => {
                     const validatedVal = validateNumericInput(val);
                     const newBoxes = Number(validatedVal) || 0;
-                    const itemsPerBox = items.find((item) => item._id === form.itemId)?.itemId?.itemsPerBox || 0;
+                    const selectedItem = items.find((item) => item._id === form.itemId);
+                    const itemsPerBox = getNestedValue(selectedItem, 'itemId.itemsPerBox') || 0;
                     const newQuantity = newBoxes * itemsPerBox;
 
                     setForm(prev => ({
@@ -511,7 +526,7 @@ export default function Index() {
                   maxLength={10}
                 />
                 <Text className="text-gray-500 text-sm mt-1">
-                  A Box Contains {items.find((item) => item._id === form.itemId)?.itemId?.itemsPerBox ?? 0} Items
+                  A Box Contains {getNestedValue(items.find((item) => item._id === form.itemId), 'itemId.itemsPerBox') ?? 0} Items
                 </Text>
 
                 <Text className="text-gray-700 font-semibold">Quantity</Text>
@@ -519,7 +534,18 @@ export default function Index() {
                   className={inputClass}
                   value={form.quantity}
                   keyboardType="decimal-pad"
-                  onChangeText={(val) => handleChange('quantity', val)}
+                  onChangeText={(val) => {
+                    const validatedVal = validateNumericInput(val);
+                    const selectedItem = items.find((item) => item._id === form.itemId);
+                    const itemsPerBox = getNestedValue(selectedItem, 'itemId.itemsPerBox') || 1;
+                    const newBoxes = Math.floor(Number(validatedVal) / itemsPerBox);
+                    
+                    setForm(prev => ({
+                      ...prev,
+                      quantity: validatedVal,
+                      boxes: newBoxes.toString()
+                    }));
+                  }}
                   editable={!isLoadingItems && !!form.itemId}
                   placeholder="Calculated quantity"
                   maxLength={10}
@@ -603,8 +629,15 @@ export default function Index() {
 
   return (
     <SafeAreaView className="flex-1 bg-white">
-      <ScrollView
-        className="flex-1"
+      <KeyboardAwareScrollView
+        style={{ flex: 1,backgroundColor:"#13545c" }}
+        contentContainerStyle={{ flexGrow: 1 }}
+        keyboardShouldPersistTaps="handled"
+        enableOnAndroid={true}
+        enableAutomaticScroll={true}
+        extraHeight={120}
+        extraScrollHeight={Platform.OS === 'ios' ? 20 : 120}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -615,11 +648,6 @@ export default function Index() {
             size="default"
           />
         }
-        contentContainerStyle={{ flexGrow: 1 }}
-        showsVerticalScrollIndicator={false}
-        scrollEventThrottle={16}
-        bounces={true}
-        alwaysBounceVertical={true}
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
           <LinearGradient colors={["#13545c", "#07363C"]} style={{ minHeight: '100%' }}>
@@ -640,6 +668,7 @@ export default function Index() {
                   <Text className="text-white font-bold">({cart.length})</Text>
                 </TouchableOpacity>
               )}
+
               <Animated.View
                 key={step}
                 style={{ flex: 1, paddingHorizontal: 24, paddingVertical: 24 }}
@@ -688,30 +717,49 @@ export default function Index() {
             </View>
           </LinearGradient>
         </TouchableWithoutFeedback>
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       <Modal visible={showCart} animationType="slide" onRequestClose={() => setShowCart(false)}>
         <SafeAreaView className="flex-1 bg-white p-4">
-          <Text className="text-lg font-bold mb-4">Cart Items</Text>
+          <View className="flex-row justify-between items-center mb-4">
+            <Text className="text-lg font-bold">Cart Items ({cart.length})</Text>
+            <TouchableOpacity onPress={() => setShowCart(false)} className="p-2">
+              <Ionicons name="close" size={24} color="#666" />
+            </TouchableOpacity>
+          </View>
+          
           <FlatList
             data={cart}
             keyExtractor={(_, i) => i.toString()}
             renderItem={({ item, index }) => (
-              <View className="flex-row justify-between items-center mb-2 border-b pb-2">
-                <View>
-                  <Text>{item.itemName}</Text>
-                  <Text>Qty: {item.quantity}</Text>
-                  <Text>₹ {item.amount}</Text>
+              <View className="flex-row justify-between items-center mb-3 p-3 bg-gray-50 rounded-xl">
+                <View className="flex-1">
+                  <Text className="font-semibold text-base">{item.itemName}</Text>
+                  <Text className="text-gray-600 text-sm">Qty: {item.quantity}</Text>
+                  <Text className="text-green-600 font-bold">₹ {item.amount}</Text>
                 </View>
-                <TouchableOpacity onPress={() => deleteCartItem(index)} className="px-3 py-1 bg-red-500 rounded-xl">
-                  <Text className="text-white">Delete</Text>
+                <TouchableOpacity 
+                  onPress={() => deleteCartItem(index)} 
+                  className="px-3 py-2 bg-red-500 rounded-lg ml-3"
+                >
+                  <Text className="text-white font-semibold">Delete</Text>
                 </TouchableOpacity>
               </View>
             )}
+            ListEmptyComponent={
+              <View className="items-center py-10">
+                <Text className="text-gray-500">No items in cart</Text>
+              </View>
+            }
           />
-          <TouchableOpacity onPress={() => setShowCart(false)} className="mt-4 px-6 py-3 bg-blue-600 rounded-full">
-            <Text className="text-white font-semibold text-center">Close</Text>
-          </TouchableOpacity>
+          
+          {cart.length > 0 && (
+            <View className="border-t pt-4 mt-4">
+              <Text className="text-lg font-bold">
+                Total: ₹{cart.reduce((sum, item) => sum + item.amount, 0)}
+              </Text>
+            </View>
+          )}
         </SafeAreaView>
       </Modal>
       <Toast />
@@ -723,48 +771,5 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: 'white',
     padding: 16,
-  },
-  dropdown: {
-    height: 50,
-    borderColor: '#ccc',
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    backgroundColor: 'white',
-  },
-  dropdownLoading: {
-    opacity: 0.6,
-    backgroundColor: '#f9f9f9',
-  },
-  icon: {
-    marginRight: 5,
-  },
-  label: {
-    position: 'absolute',
-    backgroundColor: 'white',
-    left: 22,
-    top: 8,
-    zIndex: 999,
-    paddingHorizontal: 8,
-    fontSize: 14,
-  },
-  placeholderStyle: {
-    fontSize: 16,
-    color: '#999',
-  },
-  selectedTextStyle: {
-    fontSize: 16,
-    color: '#111',
-  },
-  inputSearchStyle: {
-    height: 40,
-    fontSize: 16,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-  },
-  iconStyle: {
-    width: 20,
-    height: 20,
   },
 });

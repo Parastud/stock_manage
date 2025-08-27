@@ -8,23 +8,25 @@ import {
     Keyboard,
     KeyboardAvoidingView,
     Platform,
-    RefreshControl,
     SafeAreaView,
-    ScrollView,
-    StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
     TouchableWithoutFeedback,
-    View,
+    View
 } from 'react-native';
-import { Dropdown } from 'react-native-element-dropdown';
 import Toast from 'react-native-toast-message';
+import CustomDropdown from '../../src/Components/CustomDropdown'; // Adjust path as needed
 import axiosInstance from '../../src/utils/axios';
+
+// Utility function to get nested object values
+const getNestedValue = (obj, path) => {
+    if (!obj || !path) return null;
+    return path.split('.').reduce((current, key) => current?.[key], obj);
+};
 
 export default function Payment() {
     const [customers, setCustomers] = useState([]);
-    const [isCustomerFocus, setIsCustomerFocus] = useState(false);
     const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -75,9 +77,21 @@ export default function Payment() {
         }
     };
 
+    // Function to get customer status and color
+    const getCustomerStatus = (customer) => {
+        const amount = customer.totalPendingAmount || 0;
+        if (amount > 0) {
+            return { status: 'Pending', color: '#ef4444', bgColor: '#fef2f2' };
+        } else if (amount < 0) {
+            return { status: 'Credit', color: '#059669', bgColor: '#f0fdf4' };
+        } else {
+            return { status: 'Clear', color: '#6b7280', bgColor: '#f9fafb' };
+        }
+    };
+
     const fetchCustomers = async (isRefreshing = false) => {
-        setForm({ ...form, customerId: '' })
-        setSelectedCustomer('')
+        setForm({ ...form, customerId: '' });
+        setSelectedCustomer(null);
         const token = await AsyncStorage.getItem('userToken');
 
         // Don't show loading indicator if it's a refresh
@@ -89,12 +103,57 @@ export default function Payment() {
             const res = await axiosInstance.get("/customers?view=true&resultsPerPage=1000", {
                 headers: { Authorization: token }
             });
-            setCustomers(res?.data?.data?.items || []);
+            const customersData = res?.data?.data?.items || [];
+
+            // Sort customers: Pending first, then Credit, then Clear
+            const sortedCustomers = customersData.sort((a, b) => {
+                const aAmount = a.totalPendingAmount || 0;
+                const bAmount = b.totalPendingAmount || 0;
+
+                // Pending amounts (positive) first
+                if (aAmount > 0 && bAmount <= 0) return -1;
+                if (bAmount > 0 && aAmount <= 0) return 1;
+
+                // Credit amounts (negative) second
+                if (aAmount < 0 && bAmount >= 0) return -1;
+                if (bAmount < 0 && aAmount >= 0) return 1;
+
+                // Within same category, sort by amount (descending for pending, ascending for credit)
+                if (aAmount > 0 && bAmount > 0) return bAmount - aAmount;
+                if (aAmount < 0 && bAmount < 0) return aAmount - bAmount;
+
+                // Clear amounts last, sort by name
+                return a.name.localeCompare(b.name);
+            });
+
+            setCustomers(sortedCustomers);
+
+            const pendingCount = sortedCustomers.filter(c => c.totalPendingAmount > 0).length;
+            const creditCount = sortedCustomers.filter(c => c.totalPendingAmount < 0).length;
+            const clearCount = sortedCustomers.filter(c => (c.totalPendingAmount || 0) === 0).length;
+
 
         } catch (error) {
+            const savedCustomers = await AsyncStorage.getItem('savedcustomers');
+            if (savedCustomers) {
+                const parsedCustomers = JSON.parse(savedCustomers);
+                const sortedCustomers = parsedCustomers.sort((a, b) => {
+                    const aAmount = a.totalPendingAmount || 0;
+                    const bAmount = b.totalPendingAmount || 0;
+
+                    if (aAmount > 0 && bAmount <= 0) return -1;
+                    if (bAmount > 0 && aAmount <= 0) return 1;
+                    if (aAmount < 0 && bAmount >= 0) return -1;
+                    if (bAmount < 0 && aAmount >= 0) return 1;
+
+                    return a.name.localeCompare(b.name);
+                });
+                setCustomers(sortedCustomers);
+            }
+
             Toast.show({
                 type: "error",
-                text1: isRefreshing ? "Failed to refresh customers" : "Failed to fetch customers"
+                text1: isRefreshing ? "Failed to refresh customers" : "Using saved data"
             });
         } finally {
             if (!isRefreshing) {
@@ -106,20 +165,26 @@ export default function Payment() {
     // Handle refresh
     const onRefresh = async () => {
         Keyboard.dismiss();
-
         setRefreshing(true);
 
         try {
-            // Add a minimum delay to ensure the spinner is visible
             await Promise.all([
                 fetchCustomers(true),
-                new Promise(resolve => setTimeout(resolve, 500)) // Minimum 500ms delay
+                new Promise(resolve => setTimeout(resolve, 500))
             ]);
         } catch (error) {
             console.log('Refresh error:', error);
         } finally {
             setRefreshing(false);
         }
+    };
+
+    const handleCustomerSelect = (customer) => {
+        handleChange('customerId', customer._id);
+        setSelectedCustomer(customer);
+
+        const { status } = getCustomerStatus(customer);
+        const amount = Math.abs(customer.totalPendingAmount || 0);
     };
 
     const handleSubmit = async () => {
@@ -150,6 +215,8 @@ export default function Payment() {
             return;
         }
 
+        const totalPayment = cashAmount + onlineAmount;
+
         setIsSubmitting(true);
         const token = await AsyncStorage.getItem('userToken');
 
@@ -176,21 +243,25 @@ export default function Payment() {
             Toast.show({
                 type: 'success',
                 text1: 'Payment Added Successfully',
+                text2: `Amount: ₹${totalPayment.toFixed(2)}`
             });
 
-            fetchCustomers()
+            fetchCustomers();
             router.push({
                 pathname: "/Home/Reciept",
                 params: {
                     source: 'payment',
                     paymentId: res.data._id || res.data.data?._id || 'N/A',
                     date: new Date().toISOString(),
-                    customername: customers.find(c => c._id === form.customerId)?.name || 'Unknown',
+                    customername: selectedCustomer?.name || 'Unknown',
                     pendingAmount: res.data.data || 0,
                     payment: JSON.stringify({
                         cash: cashAmount,
                         online: onlineAmount,
+                        total: totalPayment
                     }),
+                    totalAmount: totalPayment,
+                    previousBalance: selectedCustomer?.totalPendingAmount || 0
                 }
             });
 
@@ -210,7 +281,8 @@ export default function Payment() {
                 'Something went wrong';
             Toast.show({
                 type: "error",
-                text1: "No Pending Amount Available"
+                text1: "Payment Failed",
+                text2: errMsg
             });
         } finally {
             setIsSubmitting(false);
@@ -227,220 +299,270 @@ export default function Payment() {
         return form.customerId && (cashAmount > 0 || onlineAmount > 0);
     };
 
+    const getTotalPayment = () => {
+        return (parseFloat(form.cash) || 0) + (parseFloat(form.online) || 0);
+    };
+
+    const getNewBalance = () => {
+        if (!selectedCustomer) return 0;
+        const currentBalance = selectedCustomer.totalPendingAmount || 0;
+        const totalPayment = getTotalPayment();
+        return currentBalance - totalPayment;
+    };
+
+    const getBalanceDisplay = () => {
+        const newBalance = getNewBalance();
+        if (newBalance > 0) {
+            return { text: `₹${newBalance.toFixed(2)} Pending`, color: 'text-red-600', bgColor: 'bg-red-50 border-red-200' };
+        } else if (newBalance < 0) {
+            return { text: `₹${Math.abs(newBalance).toFixed(2)} Credit`, color: 'text-green-600', bgColor: 'bg-green-50 border-green-200' };
+        } else {
+            return { text: '₹0.00 Clear', color: 'text-gray-600', bgColor: 'bg-gray-50 border-gray-200' };
+        }
+    };
+
     return (
         <SafeAreaView className="flex-1 bg-white">
-            <ScrollView
-                className="flex-1"
-                refreshControl={
-                    <RefreshControl
-                        refreshing={refreshing}
-                        onRefresh={onRefresh}
-                        colors={['#13545c', '#07363C']}
-                        tintColor="#13545c"
-                        progressBackgroundColor="#ffffff"
-                        size="default"
-                    />
-                }
-                contentContainerStyle={{ flexGrow: 1 }}
-                showsVerticalScrollIndicator={false}
-                scrollEventThrottle={16}
-                bounces={true}
-                alwaysBounceVertical={true}
-            >
-                <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-                    <LinearGradient
-                        colors={["#13545c", "#07363C"]}
-                        style={{ minHeight: '100%' }}
-                    >
-                        <View className="px-6 pt-14 pb-6">
-                            <Text className="text-white font-bold text-xl text-center mb-6">
-                                Add Payment
-                            </Text>
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+                <LinearGradient
+                    colors={["#13545c", "#07363C"]}
+                    style={{ flex: 1 }}
+                >
+                    <View className="px-6 pt-14 pb-6 flex-1">
+                        <Text className="text-white font-bold text-xl text-center mb-6">
+                            Add Payment
+                        </Text>
 
-                            <KeyboardAvoidingView
-                                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                                style={{ flex: 1 }}
-                            >
-                                <View className="bg-white p-6 rounded-2xl shadow-xl border border-gray-200 mt-10 flex-1">
-                                    <View className="space-y-6">
+                        <KeyboardAvoidingView
+                            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                            style={{ flex: 1 }}
+                        >
+                            <View className="bg-white p-6 rounded-2xl shadow-xl border border-gray-200 flex-1">
+                                <View className="space-y-6">
 
-                                        {/* Customer Dropdown */}
-                                        <View>
-                                            <Text className="text-gray-700 font-semibold mb-2">
-                                                Select Customer
-                                            </Text>
-                                            <Dropdown
-                                                style={[
-                                                    styles.dropdown,
-                                                    isCustomerFocus && { borderColor: '#2563eb', borderWidth: 2 },
-                                                    isLoadingCustomers && styles.dropdownLoading
-                                                ]}
-                                                placeholderStyle={styles.placeholderStyle}
-                                                selectedTextStyle={styles.selectedTextStyle}
-                                                inputSearchStyle={styles.inputSearchStyle}
-                                                iconStyle={styles.iconStyle}
-                                                data={isLoadingCustomers ? [] : customers}
-                                                search
-                                                maxHeight={300}
-                                                labelField="name"
-                                                valueField="_id"
-                                                placeholder={
-                                                    isLoadingCustomers
-                                                        ? 'Loading customers...'
-                                                        : (!isCustomerFocus ? 'Select Customer' : '')
-                                                }
-                                                searchPlaceholder="Search customer..."
-                                                value={form.customerId}
-                                                onFocus={() => !isLoadingCustomers && setIsCustomerFocus(true)}
-                                                onBlur={() => setIsCustomerFocus(false)}
-                                                disable={isLoadingCustomers}
-                                                onChange={(item) => {
-                                                    handleChange('customerId', item._id);
-                                                    setSelectedCustomer(item);
-                                                    setIsCustomerFocus(false);
-                                                }}
-                                                renderItem={(item) => (
-                                                    <View style={{ padding: 12 }}>
-                                                        <Text className="text-gray-800 font-medium">
-                                                            {item?.name || 'Unknown Customer'}
-                                                        </Text>
-                                                        {item?.totalPendingAmount ? (
-                                                            <Text className="text-gray-500 text-sm">
-                                                                {`Pending: ₹${item.totalPendingAmount}`}
-                                                            </Text>
-                                                        ) : null}
+                                    {/* Customer Dropdown */}
+                                    <View>
+                                        <Text className="text-gray-700 font-semibold mb-2">
+                                            Select Customer
+                                        </Text>
+                                        <CustomDropdown
+                                            data={customers}
+                                            labelField="name"
+                                            valueField="_id"
+                                            placeholder={
+                                                isLoadingCustomers
+                                                    ? 'Loading customers...'
+                                                    : customers.length === 0
+                                                        ? 'No customers found'
+                                                        : 'Select Customer'
+                                            }
+                                            searchPlaceholder="Search customer..."
+                                            value={form.customerId}
+                                            disabled={isLoadingCustomers}
+                                            loading={isLoadingCustomers}
+                                            onSelect={handleCustomerSelect}
+                                            noDataText="No customers available"
+                                            style={{
+                                                borderColor: '#d1d5db',
+                                                borderWidth: 1,
+                                                borderRadius: 12,
+                                                backgroundColor: '#ffffff'
+                                            }}
+                                            renderItem={(item) => {
+                                                const { status, color, bgColor } = getCustomerStatus(item);
+                                                const amount = Math.abs(item.totalPendingAmount || 0);
+
+                                                return (
+                                                    <View style={{
+                                                        padding: 15,
+                                                        borderBottomWidth: 1,
+                                                        borderBottomColor: '#f3f4f6',
+                                                        backgroundColor: item.totalPendingAmount > 0 ? '#fef2f2' :
+                                                            item.totalPendingAmount < 0 ? '#f0fdf4' : '#f9fafb'
+                                                    }}>
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                            <View style={{ flex: 1 }}>
+                                                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                                    <Text style={{
+                                                                        fontSize: 20,
+                                                                        marginRight: 8,
+                                                                        color: item.totalPendingAmount > 0 ? '#ef4444' :
+                                                                            item.totalPendingAmount < 0 ? '#059669' : '#6b7280'
+                                                                    }}>
+                                                                        {item.totalPendingAmount > 0 ? '🔴' :
+                                                                            item.totalPendingAmount < 0 ? '🟢' : '⚪'}
+                                                                    </Text>
+                                                                    <Text style={{ fontSize: 16, fontWeight: '500', color: '#1f2937' }}>
+                                                                        {item?.name || 'Unknown Customer'}
+                                                                    </Text>
+                                                                </View>
+
+                                                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                                                    <Text style={{
+                                                                        fontSize: 12,
+                                                                        color: color,
+                                                                        fontWeight: '600',
+                                                                        paddingHorizontal: 8,
+                                                                        paddingVertical: 2,
+                                                                        backgroundColor: bgColor,
+                                                                        borderRadius: 4,
+                                                                        marginRight: 8
+                                                                    }}>
+                                                                        {status}
+                                                                    </Text>
+                                                                    {amount > 0 && (
+                                                                        <Text style={{
+                                                                            fontSize: 14,
+                                                                            color: color,
+                                                                            fontWeight: '600'
+                                                                        }}>
+                                                                            ₹{amount.toFixed(2)}
+                                                                        </Text>
+                                                                    )}
+                                                                </View>
+
+                                                                <Text style={{
+                                                                    fontSize: 10,
+                                                                    color: '#9ca3af',
+                                                                    marginTop: 2
+                                                                }}>
+                                                                    ID: {item?._id?.slice(-8) || 'N/A'}
+                                                                </Text>
+                                                            </View>
+                                                        </View>
                                                     </View>
-                                                )}
-                                            />
-                                        </View>
+                                                );
+                                            }}
+                                        />
+                                    </View>
 
-                                        {/* Pending Amount Display - Show only when customer is selected */}
-                                        {selectedCustomer && (
+                                    {/* Current Balance Display - Show only when customer is selected */}
+                                    {selectedCustomer && (
+                                        <>
                                             <View>
                                                 <Text className="text-gray-700 font-semibold mb-2">
-                                                    Pending Amount
+                                                    Current Balance
                                                 </Text>
-                                                <TextInput
-                                                    className="bg-gray-200 border border-gray-300 rounded-xl px-4 py-3 w-full text-base"
-                                                    value={`₹${selectedCustomer?.totalPendingAmount || 0}`}
-                                                    editable={false}
-                                                />
+                                                {(() => {
+                                                    const { status, color } = getCustomerStatus(selectedCustomer);
+                                                    const amount = Math.abs(selectedCustomer.totalPendingAmount || 0);
+                                                    const bgClass = selectedCustomer.totalPendingAmount > 0 ? 'bg-red-50 border-red-200' :
+                                                        selectedCustomer.totalPendingAmount < 0 ? 'bg-green-50 border-green-200' :
+                                                            'bg-gray-50 border-gray-200';
+                                                    const textClass = selectedCustomer.totalPendingAmount > 0 ? 'text-red-700' :
+                                                        selectedCustomer.totalPendingAmount < 0 ? 'text-green-700' :
+                                                            'text-gray-700';
+
+                                                    return (
+                                                        <TextInput
+                                                            className={`${bgClass} border rounded-xl px-4 py-3 w-full text-base font-semibold ${textClass}`}
+                                                            value={amount > 0 ? `₹${amount.toFixed(2)} ${status}` : 'Clear Balance'}
+                                                            editable={false}
+                                                        />
+                                                    );
+                                                })()}
                                             </View>
-                                        )}
 
-                                        {/* Cash Payment */}
-                                        <View>
-                                            <Text className="text-gray-700 font-semibold mb-2">
-                                                Cash Payment (₹)
-                                            </Text>
-                                            <TextInput
-                                                className={inputClass}
-                                                value={form.cash}
-                                                keyboardType="decimal-pad"
-                                                onChangeText={(val) => handleChange('cash', val)}
-                                                placeholder="Enter cash amount"
-                                                editable={!isSubmitting}
-                                                maxLength={10}
-                                            />
-                                        </View>
+                                            {/* New Balance After Payment */}
+                                            {getTotalPayment() > 0 && (
+                                                <View>
+                                                    <Text className="text-gray-700 font-semibold mb-2">
+                                                        New Balance After Payment
+                                                    </Text>
+                                                    {(() => {
+                                                        const { text, color, bgColor } = getBalanceDisplay();
+                                                        return (
+                                                            <TextInput
+                                                                className={`${bgColor} border rounded-xl px-4 py-3 w-full text-base font-semibold ${color}`}
+                                                                value={text}
+                                                                editable={false}
+                                                            />
+                                                        );
+                                                    })()}
+                                                </View>
+                                            )}
+                                        </>
+                                    )}
 
-                                        {/* Online Payment */}
-                                        <View>
-                                            <Text className="text-gray-700 font-semibold mb-2">
-                                                Online Payment (₹)
-                                            </Text>
-                                            <TextInput
-                                                className={inputClass}
-                                                value={form.online}
-                                                keyboardType="decimal-pad"
-                                                onChangeText={(val) => handleChange('online', val)}
-                                                placeholder="Enter online amount"
-                                                editable={!isSubmitting}
-                                                maxLength={10}
-                                            />
-                                        </View>
-
-                                        {/* Total Payment Display */}
-                                        <View>
-                                            <Text className="text-gray-700 font-semibold mb-2">
-                                                Total Payment
-                                            </Text>
-                                            <TextInput
-                                                className="bg-gray-200 border border-gray-300 rounded-xl px-4 py-3 w-full text-base"
-                                                value={`₹${(parseFloat(form.cash) || 0) + (parseFloat(form.online) || 0)}`}
-                                                editable={false}
-                                            />
-                                        </View>
-
+                                    {/* Cash Payment */}
+                                    <View>
+                                        <Text className="text-gray-700 font-semibold mb-2">
+                                            Cash Payment (₹)
+                                        </Text>
+                                        <TextInput
+                                            className={inputClass}
+                                            value={form.cash}
+                                            keyboardType="decimal-pad"
+                                            onChangeText={(val) => handleChange('cash', val)}
+                                            placeholder="Enter cash amount"
+                                            editable={!isSubmitting}
+                                            maxLength={10}
+                                        />
                                     </View>
-                                </View>
-                            </KeyboardAvoidingView>
 
-                            {/* Submit Button */}
-                            <View className="px-6 pb-6 pt-4">
-                                <TouchableOpacity
-                                    onPress={handleSubmit}
-                                    disabled={!isFormValid() || isSubmitting}
-                                    className={`flex-row items-center justify-center ${isFormValid() && !isSubmitting ? 'bg-green-600' : 'bg-gray-400'
-                                        } px-6 py-4 rounded-xl shadow-lg`}
-                                >
-                                    {isSubmitting && (
-                                        <ActivityIndicator
-                                            size="small"
+                                    {/* Online Payment */}
+                                    <View>
+                                        <Text className="text-gray-700 font-semibold mb-2">
+                                            Online Payment (₹)
+                                        </Text>
+                                        <TextInput
+                                            className={inputClass}
+                                            value={form.online}
+                                            keyboardType="decimal-pad"
+                                            onChangeText={(val) => handleChange('online', val)}
+                                            placeholder="Enter online amount"
+                                            editable={!isSubmitting}
+                                            maxLength={10}
+                                        />
+                                    </View>
+
+                                    {/* Total Payment Display */}
+                                    <View>
+                                        <Text className="text-gray-700 font-semibold mb-2">
+                                            Total Payment Amount
+                                        </Text>
+                                        <TextInput
+                                            className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 w-full text-base font-bold text-blue-700"
+                                            value={`₹${getTotalPayment().toFixed(2)}`}
+                                            editable={false}
+                                        />
+                                    </View>
+
+                                </View>
+
+                                {/* Submit Button - Now inside the white container */}
+                                <View className="mt-6">
+                                    <TouchableOpacity
+                                        onPress={handleSubmit}
+                                        disabled={!isFormValid() || isSubmitting}
+                                        className={`flex-row items-center justify-center ${isFormValid() && !isSubmitting ? 'bg-green-600' : 'bg-gray-400'
+                                            } px-6 py-4 rounded-xl shadow-lg`}
+                                    >
+                                        {isSubmitting && (
+                                            <ActivityIndicator
+                                                size="small"
+                                                color="white"
+                                                style={{ marginRight: 8 }}
+                                            />
+                                        )}
+                                        <Ionicons
+                                            name="checkmark-circle"
+                                            size={20}
                                             color="white"
                                             style={{ marginRight: 8 }}
                                         />
-                                    )}
-                                    <Ionicons
-                                        name="checkmark-circle"
-                                        size={20}
-                                        color="white"
-                                        style={{ marginRight: 8 }}
-                                    />
-                                    <Text className="text-white font-bold text-lg">
-                                        {isSubmitting ? 'Processing...' : 'Add Payment'}
-                                    </Text>
-                                </TouchableOpacity>
+                                        <Text className="text-white font-bold text-lg">
+                                            {isSubmitting ? 'Processing...' : 'Add Payment'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
-                        </View>
-                    </LinearGradient>
-                </TouchableWithoutFeedback>
-            </ScrollView>
+                        </KeyboardAvoidingView>
+                    </View>
+                </LinearGradient>
+            </TouchableWithoutFeedback>
             <Toast />
         </SafeAreaView>
     );
 }
 
-const styles = StyleSheet.create({
-    dropdown: {
-        height: 50,
-        borderColor: '#ccc',
-        borderWidth: 1,
-        borderRadius: 12,
-        paddingHorizontal: 12,
-        backgroundColor: 'white',
-    },
-    dropdownLoading: {
-        opacity: 0.6,
-        backgroundColor: '#f9f9f9',
-    },
-    placeholderStyle: {
-        fontSize: 16,
-        color: '#999',
-    },
-    selectedTextStyle: {
-        fontSize: 16,
-        color: '#111',
-    },
-    inputSearchStyle: {
-        height: 40,
-        fontSize: 16,
-        borderColor: '#ccc',
-        borderRadius: 8,
-        paddingHorizontal: 10,
-    },
-    iconStyle: {
-        width: 20,
-        height: 20,
-    },
-});
