@@ -59,10 +59,10 @@ export default function Receipt() {
           title: 'Payment Receipt',
           todayTotal: 0,
           totalAmount: (Number(payment.cash) || 0) + (Number(payment.online) || 0),
-          totalPending: 0,
+          totalPending: params.pendingAmount,
           showItems: false,
           showOldBalance: true,
-          showPending: false
+          showPending: true
         };
 
       case 'detailed_order':
@@ -199,10 +199,15 @@ export default function Receipt() {
         </div>
         ` : ''}
         
-        <div class="section">
+        ${receiptType != 'payment' ? `
+          <div class="section">
           <div class="section-title">Total Amount</div>
           <div class="section-value amount blue">₹${receiptData.totalAmount}</div>
-        </div>
+        </div>` : `
+        <div class="section">
+          <div class="section-title">Total Pending</div>
+          <div class="section-value amount red">₹${receiptData.totalPending}</div>
+        </div>`}
         
         <div class="section">
           <div class="section-title">Payment Details</div>
@@ -210,12 +215,17 @@ export default function Receipt() {
           <div class="section-value">💳 Online: ₹${receiptData.online}</div>
         </div>
         
-        ${receiptData.showPending ? `
+        ${receiptData.showPending &&
+          receiptType != 'payment'?
+          `
         <div class="section">
           <div class="section-title">Total Pending</div>
           <div class="section-value amount red">₹${receiptData.totalPending}</div>
         </div>
-        ` : ''}
+        ` : `<div class="section">
+          <div class="section-title">Total Amount</div>
+          <div class="section-value amount blue">₹${receiptData.totalAmount}</div>
+        </div>`}
         
         ${receiptData.showItems && receiptData.items.length > 0 ? `
         <div class="section item-list">
@@ -324,10 +334,15 @@ Customer: ${receiptData.customer}`;
               <Text className="font-semibold">₹{receiptData.todayTotal}</Text>
             </View>
           )}
-          <View className="flex-row justify-between">
+          {receiptType != 'payment' ?
+            <View className="flex-row justify-between">
             <Text className="text-gray-600">Total Amount:</Text>
             <Text className="text-blue-600 font-bold text-lg">₹{receiptData.totalAmount}</Text>
           </View>
+          :<View className="flex-row justify-between">
+            <Text className="font-semibold">Total Pending:</Text>
+              <Text className="font-bold text-red-600">₹{receiptData.totalPending}</Text>
+          </View>}
         </View>
 
         {/* Payment Details */}
@@ -342,10 +357,20 @@ Customer: ${receiptData.customer}`;
             <Text className="font-medium">₹{receiptData.online}</Text>
           </View>
           {receiptData.showPending && (
+
+           (
+            receiptType != 'payment' ?
+
             <View className="flex-row justify-between border-t pt-2 mt-2">
               <Text className="font-semibold">Total Pending:</Text>
               <Text className="font-bold text-red-600">₹{receiptData.totalPending}</Text>
             </View>
+          :<View className="flex-row justify-between border-t pt-2 mt-2">
+                          <Text className="text-gray-600">Total Amount:</Text>
+            <Text className="text-blue-600 font-bold text-lg">₹{receiptData.totalAmount}</Text>
+
+            </View> 
+          )
           )}
         </View>
 

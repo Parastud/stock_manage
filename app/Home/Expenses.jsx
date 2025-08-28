@@ -18,12 +18,14 @@ import {
 } from 'react-native';
 import { Dropdown } from 'react-native-element-dropdown';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import Toast from 'react-native-toast-message';
 import axiosInstance from '../../src/utils/axios';
 
 export default function Expense() {
     const [isPaymentTypeFocus, setIsPaymentTypeFocus] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
     const router = useRouter();
 
     const [form, setForm] = useState({
@@ -43,6 +45,35 @@ export default function Expense() {
 
     const inputClass =
         'bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 w-full text-base';
+
+    // Date picker functions
+    const showDatePicker = () => {
+        setDatePickerVisibility(true);
+    };
+
+    const hideDatePicker = () => {
+        setDatePickerVisibility(false);
+    };
+
+    const handleConfirm = (selectedDate) => {
+        const formattedDate = selectedDate.toISOString().split('T')[0];
+        setForm(prev => ({
+            ...prev,
+            date: formattedDate
+        }));
+        hideDatePicker();
+    };
+
+    // Format date for display
+    const formatDateForDisplay = (dateString) => {
+        if (!dateString) return 'Select Date';
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+    };
 
     // Function to validate and format numeric input
     const validateNumericInput = (value) => {
@@ -255,13 +286,13 @@ export default function Expense() {
 
     return (
         <SafeAreaView className="flex-1 bg-white">
-                <KeyboardAwareScrollView
-                    contentContainerStyle={{ flexGrow: 1 }}
-                    enableOnAndroid
-                    keyboardShouldPersistTaps="handled"
-                    extraScrollHeight={Platform.OS === 'ios' ? 20 : 0}
-                    className='bg-[#07363C]'
-                >
+            <KeyboardAwareScrollView
+                contentContainerStyle={{ flexGrow: 1 }}
+                enableOnAndroid
+                keyboardShouldPersistTaps="handled"
+                extraScrollHeight={Platform.OS === 'ios' ? 20 : 0}
+                className='bg-[#07363C]'
+            >
                 <ScrollView
                     className="flex-1"
                     contentContainerStyle={{ flexGrow: 1 }}
@@ -298,18 +329,22 @@ export default function Expense() {
                                             />
                                         </View>
 
-                                        {/* Date */}
+                                        {/* Date Picker */}
                                         <View>
                                             <Text className="text-gray-700 font-semibold mb-2">
                                                 Date
                                             </Text>
-                                            <TextInput
-                                                className={inputClass}
-                                                value={form.date}
-                                                onChangeText={(val) => handleChange('date', val)}
-                                                placeholder="YYYY-MM-DD"
-                                                editable={!isSubmitting}
-                                            />
+                                            <TouchableOpacity
+                                                onPress={showDatePicker}
+                                                disabled={isSubmitting}
+                                            >
+                                                <View className="bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 w-full flex-row items-center justify-between">
+                                                    <Text className={`text-base ${form.date ? 'text-black' : 'text-gray-500'}`}>
+                                                        {formatDateForDisplay(form.date)}
+                                                    </Text>
+                                                    <Ionicons name="calendar" size={20} color="#6B7280" />
+                                                </View>
+                                            </TouchableOpacity>
                                         </View>
 
                                         {/* Payment Type Dropdown */}
@@ -411,8 +446,9 @@ export default function Expense() {
                                     <TouchableOpacity
                                         onPress={handleSubmit}
                                         disabled={!isFormValid() || isSubmitting}
-                                        className={`flex-row items-center justify-center ${isFormValid() && !isSubmitting ? 'bg-green-600' : 'bg-gray-400'
-                                            } px-6 py-4 rounded-xl shadow-lg`}
+                                        className={`flex-row items-center justify-center ${
+                                            isFormValid() && !isSubmitting ? 'bg-green-600' : 'bg-gray-400'
+                                        } px-6 py-4 rounded-xl shadow-lg`}
                                     >
                                         {isSubmitting && (
                                             <ActivityIndicator
@@ -436,9 +472,20 @@ export default function Expense() {
                         </LinearGradient>
                     </TouchableWithoutFeedback>
                 </ScrollView>
+
+                {/* Date Time Picker Modal */}
+                <DateTimePickerModal
+                    isVisible={isDatePickerVisible}
+                    mode="date"
+                    onConfirm={handleConfirm}
+                    onCancel={hideDatePicker}
+                    date={form.date ? new Date(form.date) : new Date()}
+                    maximumDate={new Date()}
+                />
+
                 <Toast />
-        </KeyboardAwareScrollView>
-            </SafeAreaView>
+            </KeyboardAwareScrollView>
+        </SafeAreaView>
     );
 }
 
