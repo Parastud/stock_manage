@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import CustomDropdown from '../../src/Components/CustomDropdown'; // Adjust path as needed
+import { useHealth } from '../../src/Providers/Health';
 import axiosInstance from '../../src/utils/axios';
 
 // Utility function to get nested object values
@@ -32,6 +33,7 @@ export default function Payment() {
     const [selectedCustomer, setSelectedCustomer] = useState(null);
     const [refreshing, setRefreshing] = useState(false);
     const router = useRouter();
+    const { isConnected, checkConnection } = useHealth();
 
     const [form, setForm] = useState({
         customerId: '',
@@ -236,42 +238,81 @@ export default function Payment() {
         };
 
         try {
-            const res = await axiosInstance.post('/payment', payload, {
-                headers: { Authorization: token },
-            });
+            if (await checkConnection()) {
+                const res = await axiosInstance.post('/payment', payload, {
+                    headers: { Authorization: token },
+                });
 
-            Toast.show({
-                type: 'success',
-                text1: 'Payment Added Successfully',
-                text2: `Amount: ₹${totalPayment.toFixed(2)}`
-            });
+                Toast.show({
+                    type: 'success',
+                    text1: 'Payment Added Successfully',
+                    text2: `Amount: ₹${totalPayment.toFixed(2)}`
+                });
 
-            fetchCustomers();
-            router.push({
-                pathname: "/Home/Reciept",
-                params: {
-                    source: 'payment',
-                    paymentId: res.data._id || res.data.data?._id || 'N/A',
-                    date: new Date().toISOString(),
-                    customername: selectedCustomer?.name || 'Unknown',
-                    pendingAmount: res.data.data || 0,
-                    payment: JSON.stringify({
-                        cash: cashAmount,
-                        online: onlineAmount,
-                        total: totalPayment
-                    }),
-                    totalAmount: totalPayment,
-                    previousBalance: selectedCustomer?.totalPendingAmount || 0
+                fetchCustomers();
+                router.push({
+                    pathname: "/Home/Reciept",
+                    params: {
+                        source: 'payment',
+                        paymentId: res.data._id || res.data.data?._id || 'N/A',
+                        date: new Date().toISOString(),
+                        customername: selectedCustomer?.name || 'Unknown',
+                        pendingAmount: res.data.data || 0,
+                        payment: JSON.stringify({
+                            cash: cashAmount,
+                            online: onlineAmount,
+                            total: totalPayment
+                        }),
+                        totalAmount: totalPayment,
+                        previousBalance: selectedCustomer?.totalPendingAmount || 0
+                    }
+                });
+                setForm({
+                    customerId: '',
+                    cash: '',
+                    online: '',
+                });
+                setSelectedCustomer(null);
+            } else {
+                const oldData = await AsyncStorage.getItem("missedpayments");
+                let data = [];
+                if (oldData) {
+                    data = JSON.parse(oldData);
                 }
-            });
+                data.push(payload);
+                await AsyncStorage.setItem("missedpayments", JSON.stringify(data));
+                Toast.show({
+                    type: 'info',
+                    text1: 'Payments are being added offline',
+                });
+                fetchCustomers();
 
-            // Reset form
-            setForm({
-                customerId: '',
-                cash: '',
-                online: '',
-            });
-            setSelectedCustomer(null);
+                const newPendingAmount = getNewBalance();
+
+                router.push({
+                    pathname: "/Home/Reciept",
+                    params: {
+                        source: 'payment',
+                        paymentId: 'Offline Mode',
+                        date: new Date().toISOString(),
+                        customername: selectedCustomer?.name || 'Unknown',
+                        pendingAmount: newPendingAmount, // Use calculated value instead of res.data.data
+                        payment: JSON.stringify({
+                            cash: cashAmount,
+                            online: onlineAmount,
+                            total: totalPayment
+                        }),
+                        totalAmount: totalPayment,
+                        previousBalance: selectedCustomer?.totalPendingAmount || 0
+                    }
+                });
+                setForm({
+                    customerId: '',
+                    cash: '',
+                    online: '',
+                });
+                setSelectedCustomer(null);
+            }
 
         } catch (error) {
             const errMsg =

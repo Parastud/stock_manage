@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
+import { useHealth } from '../../../src/Providers/Health';
 import axiosInstance from '../../../src/utils/axios';
 
 export default function History() {
@@ -22,6 +23,7 @@ export default function History() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter()
+        const { isConnected, checkConnection } = useHealth();
   const fetchOrders = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
@@ -36,14 +38,18 @@ export default function History() {
       });
 
       const list = res?.data?.data?.items ?? [];
-      setOrders(Array.isArray(list) ? list : []);
+      await AsyncStorage.setItem('missedorderhistory', JSON.stringify(list));
+      setOrders(list);
     } catch (error) {
-      const errMsg =
-        error?.response?.data?.errors?.[0]?.message ||
-        error?.response?.data?.message ||
-        error?.message ||
-        'Failed to fetch orders';
-      Toast.show({ type: 'error', text1: errMsg });
+      const savedorders = await AsyncStorage.getItem('missedorderhistory');
+      if(savedorders){
+        Toast.show({
+        type: "error",
+        text1: "Using Pre saved Data"
+      });
+        setOrders(JSON.parse(savedorders));
+      }
+      
     } finally {
       if (!silent) setLoading(false);
       setRefreshing(false);
@@ -113,7 +119,7 @@ export default function History() {
     const pending = totalAmount - (cash + online);
 
     return (
-      <TouchableOpacity onPress={() => router.push(`Home/History/${order._id}`)}>
+      <TouchableOpacity onPress={async() => {await checkConnection() ? router.push(`Home/History/${order._id}`) : Toast.show({ type: "error", text1: "No Internet Connection" })}}>
         <View style={styles.card}>
           {/* Top: S.No + Customer + Date */}
           <View style={styles.rowTop}>

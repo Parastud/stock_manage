@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
     ActivityIndicator,
@@ -20,13 +19,14 @@ import { Dropdown } from 'react-native-element-dropdown';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import Toast from 'react-native-toast-message';
+import { useHealth } from '../../src/Providers/Health';
 import axiosInstance from '../../src/utils/axios';
 
 export default function Expense() {
     const [isPaymentTypeFocus, setIsPaymentTypeFocus] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
-    const router = useRouter();
+      const { isConnected, checkConnection } = useHealth();
 
     const [form, setForm] = useState({
         name: '',
@@ -225,26 +225,45 @@ export default function Expense() {
             online: onlineAmount,
         };
 
-        try {
-            const res = await axiosInstance.post('/expense', payload, {
-                headers: { Authorization: token },
-            });
+         try {
+            if (await checkConnection()) {
+                await axiosInstance.post('/expense', payload, {
+                    headers: { Authorization: token },
+                });
+                Toast.show({
+                    type: 'success',
+                    text1: 'Expense Added Successfully',
+                });
+                setForm({
+                    name: '',
+                    amount: '',
+                    date: new Date().toISOString().split('T')[0],
+                    paymentType: 'cash',
+                    cash: '',
+                    online: '',
+                });
+            } else {
+                const oldData = await AsyncStorage.getItem("missedexpenses");
+                let data = [];
+                if (oldData) {
+                    data = JSON.parse(oldData);
+                }
+                data.push(payload);
+                await AsyncStorage.setItem("missedexpenses", JSON.stringify(data));
+                Toast.show({
+                    type: 'info',
+                    text1: 'Expenses are being added offline',
+                });
+                setForm({
+                    name: '',
+                    amount: '',
+                    date: new Date().toISOString().split('T')[0],
+                    paymentType: 'cash',
+                    cash: '',
+                    online: '',
+                });
 
-            Toast.show({
-                type: 'success',
-                text1: 'Expense Added Successfully',
-            });
-
-            // Reset form
-            setForm({
-                name: '',
-                amount: '',
-                date: new Date().toISOString().split('T')[0],
-                paymentType: 'cash',
-                cash: '',
-                online: '',
-            });
-
+            }
         } catch (error) {
             const errMsg =
                 error?.response?.data?.errors?.[0]?.message ||
