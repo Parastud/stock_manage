@@ -16,11 +16,10 @@ import {
     View
 } from 'react-native';
 import Toast from 'react-native-toast-message';
-import CustomDropdown from '../../src/Components/CustomDropdown'; // Adjust path as needed
+import CustomDropdown from '../../src/Components/CustomDropdown';
 import { useHealth } from '../../src/Providers/Health';
 import axiosInstance from '../../src/utils/axios';
 
-// Utility function to get nested object values
 const getNestedValue = (obj, path) => {
     if (!obj || !path) return null;
     return path.split('.').reduce((current, key) => current?.[key], obj);
@@ -44,18 +43,14 @@ export default function Payment() {
     const inputClass =
         'bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 w-full text-base';
 
-    // Function to validate and format numeric input
     const validateNumericInput = (value) => {
-        // Remove any non-numeric characters except decimal point
         const numericValue = value.replace(/[^0-9.]/g, '');
 
-        // Ensure only one decimal point
         const parts = numericValue.split('.');
         if (parts.length > 2) {
             return parts[0] + '.' + parts.slice(1).join('');
         }
 
-        // Convert to number and check if it's negative
         const numberValue = parseFloat(numericValue);
         if (numberValue < 0 || numericValue.startsWith('-')) {
             return '';
@@ -79,7 +74,6 @@ export default function Payment() {
         }
     };
 
-    // Function to get customer status and color
     const getCustomerStatus = (customer) => {
         const amount = customer.totalPendingAmount || 0;
         if (amount > 0) {
@@ -96,7 +90,6 @@ export default function Payment() {
         setSelectedCustomer(null);
         const token = await AsyncStorage.getItem('userToken');
 
-        // Don't show loading indicator if it's a refresh
         if (!isRefreshing) {
             setIsLoadingCustomers(true);
         }
@@ -107,24 +100,19 @@ export default function Payment() {
             });
             const customersData = res?.data?.data?.items || [];
 
-            // Sort customers: Pending first, then Credit, then Clear
             const sortedCustomers = customersData.sort((a, b) => {
                 const aAmount = a.totalPendingAmount || 0;
                 const bAmount = b.totalPendingAmount || 0;
 
-                // Pending amounts (positive) first
                 if (aAmount > 0 && bAmount <= 0) return -1;
                 if (bAmount > 0 && aAmount <= 0) return 1;
 
-                // Credit amounts (negative) second
                 if (aAmount < 0 && bAmount >= 0) return -1;
                 if (bAmount < 0 && aAmount >= 0) return 1;
 
-                // Within same category, sort by amount (descending for pending, ascending for credit)
                 if (aAmount > 0 && bAmount > 0) return bAmount - aAmount;
                 if (aAmount < 0 && bAmount < 0) return aAmount - bAmount;
 
-                // Clear amounts last, sort by name
                 return a.name.localeCompare(b.name);
             });
 
@@ -164,7 +152,6 @@ export default function Payment() {
         }
     };
 
-    // Handle refresh
     const onRefresh = async () => {
         Keyboard.dismiss();
         setRefreshing(true);
@@ -175,7 +162,6 @@ export default function Payment() {
                 new Promise(resolve => setTimeout(resolve, 500))
             ]);
         } catch (error) {
-            console.log('Refresh error:', error);
         } finally {
             setRefreshing(false);
         }

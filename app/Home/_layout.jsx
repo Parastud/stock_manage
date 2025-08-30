@@ -1,21 +1,39 @@
-import { FontAwesome } from "@expo/vector-icons"
-import { Tabs } from "expo-router"
-import { useEffect } from "react"
-import { SafeAreaView } from "react-native-safe-area-context"
-import NoInternetWrapper from "../../src/Components/NoInternetBanner"
-import { useHealth } from "../../src/Providers/Health"
-import oldsync from "../../src/utils/oldsync"
+import { FontAwesome } from "@expo/vector-icons";
+import { Tabs } from "expo-router";
+import { useEffect, useRef } from "react";
+import { SafeAreaView } from "react-native";
+import NoInternetWrapper from "../../src/Components/NoInternetBanner";
+import { useHealth } from "../../src/Providers/Health";
+import syncOfflineData from "../../src/utils/syncOfflineData"; // Use the new clean sync
+
+let appSyncExecuted = false; // Global flag
 
 export default function HomeLayout() {
-    const { isConnected, checkConnection } = useHealth()
-    checkConnection()
+    const { isConnected, checkConnection } = useHealth();
+    const syncAttempted = useRef(false);
 
     useEffect(() => {
-        if (isConnected) {
-            oldsync()
-        }
+        checkConnection();
+    }, []);
 
-    }, [])
+    useEffect(() => {
+        if (isConnected && !syncAttempted.current && !appSyncExecuted) {
+            syncAttempted.current = true;
+            appSyncExecuted = true;
+            
+            syncOfflineData()
+              .then(result => {
+                if (result?.success && result?.results?.total?.success > 0) {
+                } else if (result?.message) {
+                } else if (result?.error) {
+                  console.warn("⚠️ Sync error:", result.error);
+                }
+              })
+              .catch(error => {
+                console.error("❌ Sync failed:", error.message);
+              });
+        }
+    }, [isConnected]);
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: "#07363C" }}>
@@ -48,6 +66,7 @@ export default function HomeLayout() {
                     <Tabs.Screen
                         name="Expenses"
                         options={{
+                            title: "Expenses",
                             tabBarIcon: ({ color }) => <FontAwesome name="credit-card" size={24} color={color} />
                         }}
                     />
@@ -65,9 +84,15 @@ export default function HomeLayout() {
                             tabBarIcon: ({ color }) => <FontAwesome name="user" size={24} color={color} />
                         }}
                     />
-                    <Tabs.Screen name="Reciept" options={{ href: null, tabBarStyle: { display: 'none' } }} />
+                    <Tabs.Screen 
+                        name="Receipt" 
+                        options={{ 
+                            href: null, 
+                            tabBarStyle: { display: 'none' } 
+                        }} 
+                    />
                 </Tabs>
             </NoInternetWrapper>
         </SafeAreaView>
-    )
+    );
 }

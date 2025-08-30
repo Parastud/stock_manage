@@ -46,7 +46,6 @@ export default function Expense() {
     const inputClass =
         'bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 w-full text-base';
 
-    // Date picker functions
     const showDatePicker = () => {
         setDatePickerVisibility(true);
     };
@@ -64,7 +63,6 @@ export default function Expense() {
         hideDatePicker();
     };
 
-    // Format date for display
     const formatDateForDisplay = (dateString) => {
         if (!dateString) return 'Select Date';
         const date = new Date(dateString);
@@ -75,18 +73,14 @@ export default function Expense() {
         });
     };
 
-    // Function to validate and format numeric input
     const validateNumericInput = (value) => {
-        // Remove any non-numeric characters except decimal point
         const numericValue = value.replace(/[^0-9.]/g, '');
 
-        // Ensure only one decimal point
         const parts = numericValue.split('.');
         if (parts.length > 2) {
             return parts[0] + '.' + parts.slice(1).join('');
         }
 
-        // Convert to number and check if it's negative
         const numberValue = parseFloat(numericValue);
         if (numberValue < 0 || numericValue.startsWith('-')) {
             return '';
@@ -110,7 +104,6 @@ export default function Expense() {
         }
     };
 
-    // Calculate total amount when cash or online changes
     const handleCashChange = (value) => {
         const validatedValue = validateNumericInput(value);
         const totalAmount = parseFloat(validatedValue || 0) + parseFloat(form.online || 0);
@@ -131,7 +124,6 @@ export default function Expense() {
         }));
     };
 
-    // Handle payment type change
     const handlePaymentTypeChange = (type) => {
         let newForm = { ...form, paymentType: type };
 
@@ -142,7 +134,6 @@ export default function Expense() {
             newForm.online = form.amount;
             newForm.cash = '';
         } else {
-            // For mixed type, clear both to allow manual entry
             newForm.cash = '';
             newForm.online = '';
             newForm.amount = '';

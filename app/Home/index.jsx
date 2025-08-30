@@ -133,7 +133,7 @@ export default function Index() {
         });
         const responseData = res.data.data;
         router.push({
-          pathname: "/Home/Reciept",
+          pathname: "/Home/Receipt",
           params: {
             ...responseData,
             source: 'order',
@@ -153,7 +153,7 @@ export default function Index() {
         data.push(payload);
         await AsyncStorage.setItem("missedorders", JSON.stringify(data));
         router.push({
-          pathname: "/Home/Reciept",
+          pathname: "/Home/Receipt",
           params: {
             source: 'order',
             _id: 'Offline Mode',
