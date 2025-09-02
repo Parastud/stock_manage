@@ -1,18 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
 import {
-    Animated,
-    Dimensions,
-    FlatList,
-    Keyboard,
-    Modal,
-    Platform,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Animated,
+  Dimensions,
+  FlatList,
+  Keyboard,
+  Modal,
+  Platform,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
@@ -454,7 +454,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    height: 36,
+    height: 40,
     fontSize: 16,
     color: '#1f2937',
     paddingHorizontal: 8,

@@ -25,7 +25,7 @@ export const HealthProvider = ({ children }) => {
         const token = await AsyncStorage.getItem("userToken");
         const res = await axiosInstance.get("/heartbeat", {
           headers: { Authorization: token },
-          timeout: 5000
+          timeout: 2000
         });
 
         const serverReachable = res.status === 200;
