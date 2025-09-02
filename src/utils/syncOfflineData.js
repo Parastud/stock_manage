@@ -14,7 +14,6 @@ const API_ENDPOINTS = {
   PAYMENT: '/payment'
 };
 
-// Helper function to safely parse JSON
 const safeJsonParse = (jsonString, fallback = []) => {
   try {
     return JSON.parse(jsonString) || fallback;
@@ -24,7 +23,6 @@ const safeJsonParse = (jsonString, fallback = []) => {
   }
 };
 
-// Helper function to sync individual items
 const syncItems = async (items, endpoint, token, itemType) => {
   if (!items || items.length === 0) return { success: 0, failed: 0 };
 
@@ -56,7 +54,6 @@ const syncItems = async (items, endpoint, token, itemType) => {
   return { success: successCount, failed: failedCount };
 };
 
-// Main sync function - NO REACT HOOKS, PURE JAVASCRIPT
 export default async function syncOfflineData() {
   try {
     const token = await AsyncStorage.getItem(STORAGE_KEYS.USER_TOKEN);

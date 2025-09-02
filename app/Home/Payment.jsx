@@ -237,7 +237,7 @@ export default function Payment() {
 
                 fetchCustomers();
                 router.push({
-                    pathname: "/Home/Reciept",
+                    pathname: "/Home/Receipt",
                     params: {
                         source: 'payment',
                         paymentId: res.data._id || res.data.data?._id || 'N/A',
@@ -276,7 +276,7 @@ export default function Payment() {
                 const newPendingAmount = getNewBalance();
 
                 router.push({
-                    pathname: "/Home/Reciept",
+                    pathname: "/Home/Receipt",
                     params: {
                         source: 'payment',
                         paymentId: 'Offline Mode',
