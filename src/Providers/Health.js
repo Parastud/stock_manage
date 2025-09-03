@@ -47,8 +47,6 @@ export const HealthProvider = ({ children }) => {
   useEffect(() => {
     checkConnection();
     
-    const interval = setInterval(checkConnection, 60000);
-    
     const unsubscribe = NetInfo.addEventListener(state => {
       if (state.isConnected !== isConnected) {
         checkConnection();
@@ -56,7 +54,6 @@ export const HealthProvider = ({ children }) => {
     });
 
     return () => {
-      clearInterval(interval);
       unsubscribe();
     };
   }, []);

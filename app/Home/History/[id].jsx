@@ -101,7 +101,7 @@ export default function OrderHistory() {
     }
 
     router.push({
-      pathname: '/Home/Reciept',
+      pathname: '/Home/Receipt',
       params: paramsToSend,
     });
   };

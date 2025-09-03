@@ -1,102 +1,141 @@
 import { FontAwesome } from "@expo/vector-icons";
-import { Tabs } from "expo-router";
-import { useEffect, useRef } from "react";
-import { SafeAreaView } from "react-native";
+import { Tabs, usePathname /* or useSegments */ } from "expo-router";
+import { useEffect, useState } from "react";
+import { Pressable, SafeAreaView, Text } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import NoInternetWrapper from "../../src/Components/NoInternetBanner";
 import { useHealth } from "../../src/Providers/Health";
 import syncOfflineData from "../../src/utils/syncOfflineData";
 
-let appSyncExecuted = false; // Global flag
-
 export default function HomeLayout() {
-    const { isConnected, checkConnection } = useHealth();
-    const syncAttempted = useRef(false);
+  const { isConnected, checkConnection } = useHealth();
+  const insets = useSafeAreaInsets();
 
-    const insets = useSafeAreaInsets();
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncSucceeded, setSyncSucceeded] = useState(false);
 
-    useEffect(() => {
-        checkConnection();
-    }, []);
+  const pathname = usePathname(); 
+  const onReceipt = pathname?.toLowerCase().includes("/receipt");
 
-    useEffect(() => {
-        if (isConnected && !syncAttempted.current && !appSyncExecuted) {
-            syncAttempted.current = true;
-            appSyncExecuted = true;
+  useEffect(() => {
+    checkConnection();
+  }, []);
 
-            syncOfflineData()
-                .then(result => {
-                    if (result?.success && result?.results?.total?.success > 0) {
-                    } else if (result?.message) {
-                    } else if (result?.error) {
-                        console.warn("⚠️ Sync error:", result.error);
-                    }
-                })
-                .catch(error => {
-                    console.error("❌ Sync failed:", error.message);
-                });
-        }
-    }, [isConnected]);
+  const handleSync = async () => {
+    if (!isConnected || isSyncing || syncSucceeded) return;
+    setIsSyncing(true);
+    try {
+      const result = await syncOfflineData();
+      if (result?.success) {
+        setSyncSucceeded(true);
+      } else {
+        setIsSyncing(false);
+      }
+    } catch {
+      setIsSyncing(false);
+    }
+  };
 
-    return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: "#07363C" }}>
-            <NoInternetWrapper>
-                <Tabs
-                    screenOptions={{
-                        headerShown: false,
-                        tabBarActiveTintColor: 'white',
-                        tabBarInactiveTintColor: 'gray',
-                        tabBarStyle: {
-                            backgroundColor: '#07363C',
-                            height: 60 + insets.bottom,  // Adjust height with safe area
-                            paddingBottom: insets.bottom > 0 ? insets.bottom : 10, // fallback padding
-                        }
-                    }}
-                >
-                    <Tabs.Screen
-                        name="index"
-                        options={{
-                            title: "Home",
-                            tabBarIcon: ({ color }) => <FontAwesome name="home" size={24} color={color} />
-                        }}
-                    />
-                    <Tabs.Screen
-                        name="Payment"
-                        options={{
-                            title: "Payment",
-                            tabBarIcon: ({ color }) => <FontAwesome name="money" size={24} color={color} />
-                        }}
-                    />
-                    <Tabs.Screen
-                        name="Expenses"
-                        options={{
-                            title: "Expenses",
-                            tabBarIcon: ({ color }) => <FontAwesome name="credit-card" size={24} color={color} />
-                        }}
-                    />
-                    <Tabs.Screen
-                        name="History"
-                        options={{
-                            title: "Order History",
-                            tabBarIcon: ({ color }) => <FontAwesome name="history" size={24} color={color} />
-                        }}
-                    />
-                    <Tabs.Screen
-                        name="Profile"
-                        options={{
-                            title: "Profile",
-                            tabBarIcon: ({ color }) => <FontAwesome name="user" size={24} color={color} />
-                        }}
-                    />
-                    <Tabs.Screen
-                        name="Receipt"
-                        options={{
-                            href: null,
-                            tabBarStyle: { display: 'none' }
-                        }}
-                    />
-                </Tabs>
-            </NoInternetWrapper>
-        </SafeAreaView>
-    );
+  const canPress = isConnected && !isSyncing && !syncSucceeded;
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#07363C" }}>
+      {isConnected && !onReceipt && (
+        <Pressable
+          onPress={handleSync}
+          disabled={!canPress}
+          style={{
+            position: "absolute",
+            top: insets.top + 8,
+            left: 12,
+            zIndex: 10,
+            backgroundColor: canPress ? "#0EA5A6" : "#2C555A",
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            borderRadius: 8,
+            flexDirection: "row",
+            alignItems: "center",
+          }}
+        >
+          <FontAwesome
+            name={syncSucceeded ? "check" : "cloud-upload"}
+            size={16}
+            color="#fff"
+            style={{ marginRight: 6 }}
+          />
+          <Text style={{ color: "#fff", fontWeight: "600" }}>
+            {syncSucceeded ? "Synced" : isSyncing ? "Syncing..." : "Sync"}
+          </Text>
+        </Pressable>
+      )}
+
+      <NoInternetWrapper>
+        <Tabs
+          screenOptions={{
+            headerShown: false,
+            tabBarActiveTintColor: "white",
+            tabBarInactiveTintColor: "gray",
+            tabBarStyle: {
+              backgroundColor: "#07363C",
+              height: 60 + insets.bottom,
+              paddingBottom: insets.bottom > 0 ? insets.bottom : 10,
+            },
+          }}
+        >
+          <Tabs.Screen
+            name="index"
+            options={{
+              title: "Home",
+              tabBarIcon: ({ color }) => (
+                <FontAwesome name="home" size={24} color={color} />
+              ),
+            }}
+          />
+          <Tabs.Screen
+            name="Payment"
+            options={{
+              title: "Payment",
+              tabBarIcon: ({ color }) => (
+                <FontAwesome name="money" size={24} color={color} />
+              ),
+            }}
+          />
+          <Tabs.Screen
+            name="Expenses"
+            options={{
+              title: "Expenses",
+              tabBarIcon: ({ color }) => (
+                <FontAwesome name="credit-card" size={24} color={color} />
+              ),
+            }}
+          />
+          <Tabs.Screen
+            name="History"
+            options={{
+              title: "Order History",
+              tabBarIcon: ({ color }) => (
+                <FontAwesome name="history" size={24} color={color} />
+              ),
+            }}
+          />
+          <Tabs.Screen
+            name="Profile"
+            options={{
+              title: "Profile",
+              tabBarIcon: ({ color }) => (
+                <FontAwesome name="user" size={24} color={color} />
+              ),
+            }}
+          />
+          <Tabs.Screen
+            name="Receipt"
+            options={{
+              href: null,
+              tabBarStyle: { display: "none" },
+            }}
+          />
+        </Tabs>
+      </NoInternetWrapper>
+    </SafeAreaView>
+  );
 }
